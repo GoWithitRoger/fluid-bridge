@@ -1,0 +1,36 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ty/
+.coverage
+htmlcov/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# FluidAudio / Swift / model artifacts
+.build/
+.swiftpm/
+swift/.build/
+swift/.swiftpm/
+.fluid-audio/
+.fluidaudio/
+Models/
+model-cache/
+*.mlmodelc/
+
+# Local audio and generated results
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.aac
+*.rttm
+*_results.json
+*_output.json
+out.wav
+
