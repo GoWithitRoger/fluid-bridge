@@ -20,6 +20,18 @@ The support contract is complete **CLI transport parity**, not a duplicate imple
 FluidAudio Swift SDK. See the [full capability matrix](docs/CAPABILITIES.md) and
 [validation guide](docs/VALIDATION.md).
 
+## Important Prerequisite
+
+`fluid-bridge` is not a built-in macOS speech feature and it does not contain FluidAudio itself.
+macOS supplies the Core ML runtime and Apple Silicon hardware that can execute compatible models;
+it does **not** ship the FluidAudio SDK, `fluidaudiocli`, or FluidAudio's model assets.
+
+This package is a Python adapter around a separate FluidAudio CLI installation. Before it can run
+transcription, diarization, VAD, text-to-speech, or voice cloning, provide FluidAudio by either
+installing its CLI or pointing the bridge at a local FluidAudio checkout. The bridge never installs
+FluidAudio. The external FluidAudio process, not this Python package, controls any model download
+and cache behavior triggered by an inference command.
+
 ## Install
 
 ```bash
@@ -28,7 +40,9 @@ cd fluid-bridge
 uv sync --all-extras --locked
 ```
 
-FluidAudio itself is not bundled. Use one of these setup paths:
+### Provide FluidAudio
+
+Use one of these setup paths for the separate FluidAudio dependency:
 
 ```bash
 # Option 1: put a built FluidAudio CLI on PATH
@@ -41,6 +55,11 @@ swift run --package-path "$FLUID_AUDIO_PACKAGE" fluidaudiocli --help
 # Option 3: provide an exact command
 export FLUID_BRIDGE_CLI='swift run --package-path /path/to/FluidAudio fluidaudiocli'
 ```
+
+`fluid-bridge doctor --probe` verifies this connection without loading a model. The first actual
+inference command may cause FluidAudio to download and cache the selected third-party model assets;
+consult FluidAudio's upstream documentation for model availability, storage, proxy, and offline
+controls.
 
 ## Python Usage
 
@@ -172,8 +191,12 @@ Swift compiler/SDK incompatibility messages and keeps the original toolchain dia
 ## Relationship To FluidAudio
 
 This project is an unofficial Python adapter. FluidAudio is upstream-owned by Fluid Inference and
-has its own source, model, and third-party licensing. FluidAudio may download model assets on first
-use; see upstream documentation for registry, proxy, and offline-mode controls.
+has its own source, model, and third-party licensing. Core ML is Apple technology for packaging and
+running compatible models; the models FluidAudio uses are not Apple-provided macOS speech models.
+FluidAudio converts or integrates third-party open models for Core ML/ANE execution and may download
+their assets on first use. See the upstream documentation for model provenance, registry, proxy, and
+offline-mode controls. The source-backed [dependency research note](docs/RESEARCH-FLUIDAUDIO-DEPENDENCIES.md)
+explains the relationship among macOS, FluidAudio, and `fluidaudio-rs`.
 
 ## Prior Art
 

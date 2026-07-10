@@ -4,6 +4,14 @@
 `372eb32a3b23342d11dca41ed75cd4d11d3f8955`. That snapshot registers 33 commands. Every command and
 option is callable through `fluid-bridge raw -- ...` and `FluidAudioBridge.run(...)`.
 
+## Runtime Prerequisite
+
+The bridge is a Python adapter, not FluidAudio itself. macOS provides Core ML and compatible Apple
+Silicon hardware, but it does not include FluidAudio, `fluidaudiocli`, or the third-party model assets
+that FluidAudio runs. A caller must provide a built CLI on `PATH`, an explicit `FLUID_BRIDGE_CLI`
+command, or a FluidAudio checkout through `FLUID_AUDIO_PACKAGE`. The bridge does not install the CLI
+or download model assets; first inference is managed by the configured FluidAudio installation.
+
 The bridge deliberately does not recreate all 33 upstream parsers. Four common workflows have a
 curated stable interface; every uncommon, experimental, benchmark, dataset, and newly added option
 continues through the lossless compatibility interface. Friendly commands also accept an unparsed

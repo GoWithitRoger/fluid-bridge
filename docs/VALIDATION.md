@@ -1,7 +1,8 @@
 # Validation Guide
 
-The validation strategy has three tiers. The first is always safe and local; later tiers require an
-actual macOS FluidAudio installation and, for inference, explicit consent to model downloads.
+The validation strategy has three tiers. The first is always safe and local; later tiers require a
+separate FluidAudio installation on macOS and, for inference, explicit consent to model downloads.
+macOS alone provides neither `fluidaudiocli` nor FluidAudio model assets.
 
 ## Tier 1: Automated Adapter Tests
 
