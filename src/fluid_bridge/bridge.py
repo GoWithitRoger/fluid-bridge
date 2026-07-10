@@ -194,7 +194,14 @@ class FluidAudioBridge:
         }
         prior_output_state = self._file_state(io_output_path)
 
-        proc = self._runner(command, env, cwd, self.config.timeout_s)
+        try:
+            proc = self._runner(command, env, cwd, self.config.timeout_s)
+        except subprocess.TimeoutExpired as exc:
+            raise FluidAudioBridgeError(
+                f"FluidAudio CLI timed out after {exc.timeout} seconds"
+            ) from exc
+        except OSError as exc:
+            raise FluidAudioBridgeError(f"Unable to run FluidAudio CLI: {exc}") from exc
         parsed_json = None
         parse_error = None
 
@@ -240,6 +247,12 @@ class FluidAudioBridge:
                 stdout="",
                 stderr="",
             )
+        except subprocess.TimeoutExpired as exc:
+            raise FluidAudioBridgeError(
+                f"FluidAudio CLI timed out after {exc.timeout} seconds"
+            ) from exc
+        except OSError as exc:
+            raise FluidAudioBridgeError(f"Unable to run FluidAudio CLI: {exc}") from exc
         return CommandResult(
             command=tuple(command),
             returncode=proc.returncode,
@@ -643,7 +656,9 @@ class FluidAudioBridge:
             )
         except (OSError, subprocess.TimeoutExpired):
             return None
-        return proc.stdout.strip() or None if proc.returncode == 0 else None
+        if proc.returncode != 0:
+            return None
+        return proc.stdout.strip() or None
 
     @staticmethod
     def _is_swift_toolchain_mismatch(output: str) -> bool:

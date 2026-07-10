@@ -14,7 +14,7 @@ from fluid_bridge.capabilities import CapabilityReport, CommandCapability, DeepC
 from fluid_bridge.streaming import StreamEvent, StreamingCommand
 
 FluidCLI = FluidAudioBridge
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "CapabilityReport",

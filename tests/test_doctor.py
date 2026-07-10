@@ -106,6 +106,19 @@ def test_doctor_recognizes_swift_sdk_mismatch(monkeypatch: pytest.MonkeyPatch) -
     }
 
 
+def test_developer_dir_ignores_stdout_from_failed_xcode_select(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "fluid_bridge.bridge.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 1, "/stale/developer/path\n", "xcode-select failed\n"
+        ),
+    )
+
+    assert FluidAudioBridge._developer_dir() is None
+
+
 def test_cli_doctor_probe_returns_nonzero_for_unready_report(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

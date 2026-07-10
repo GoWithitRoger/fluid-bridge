@@ -311,6 +311,46 @@ def test_run_live_uses_configured_invocation_context(tmp_path: Path) -> None:
     assert result.stderr == ""
 
 
+@pytest.mark.parametrize("live", [False, True])
+def test_execution_wraps_subprocess_timeout(live: bool) -> None:
+    def timeout_runner(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(command, 0.25)
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=timeout_runner,
+        live_runner=timeout_runner,
+    )
+
+    with pytest.raises(FluidAudioBridgeError, match="timed out after 0.25 seconds"):
+        (bridge.run_live if live else bridge.run)(["future-command"])
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_execution_wraps_process_start_error(live: bool) -> None:
+    def missing_runner(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError("missing executable")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=missing_runner,
+        live_runner=missing_runner,
+    )
+
+    with pytest.raises(FluidAudioBridgeError, match="Unable to run FluidAudio CLI"):
+        (bridge.run_live if live else bridge.run)(["future-command"])
+
+
 def test_capabilities_compares_advertised_commands_with_pinned_baseline() -> None:
     help_text = """\
 FluidAudio CLI
