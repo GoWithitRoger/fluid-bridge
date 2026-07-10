@@ -53,6 +53,141 @@ def test_explicit_command_takes_precedence() -> None:
     assert calls == [["fluid-custom", "--quiet", "transcribe", "audio.wav", "--model-version", "v2"]]
 
 
+def test_transcribe_parses_named_json_artifact(tmp_path: Path) -> None:
+    output = tmp_path / "transcript.json"
+    payload = {"text": "hello", "wordTimings": []}
+    calls: list[list[str]] = []
+
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        output.write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=run,
+    )
+
+    result = bridge.transcribe(
+        "audio.wav",
+        streaming=True,
+        language="en",
+        output_json=output,
+    )
+
+    assert calls == [
+        [
+            "fluidaudiocli",
+            "transcribe",
+            "audio.wav",
+            "--streaming",
+            "--language",
+            "en",
+            "--output-json",
+            str(output),
+        ]
+    ]
+    assert result.parsed_json == payload
+    assert result.parse_error is None
+    assert result.output_path == output
+    assert result.artifacts == {"transcript": output}
+
+
+def test_transcribe_preserves_raw_output_when_json_artifact_is_malformed(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "transcript.json"
+
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        output.write_text("{partial", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "transcript complete\n", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=run,
+    )
+
+    result = bridge.transcribe("audio.wav", output_json=output)
+
+    assert result.returncode == 0
+    assert result.stdout == "transcript complete\n"
+    assert result.stderr == ""
+    assert result.parsed_json is None
+    assert result.parse_error is not None
+    assert result.artifacts == {"transcript": output}
+
+
+def test_transcribe_captures_json_decode_errors(tmp_path: Path) -> None:
+    output = tmp_path / "transcript.json"
+
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        output.write_bytes(b"\xff\xfe")
+        return subprocess.CompletedProcess(command, 0, "raw output\n", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=run,
+    )
+
+    result = bridge.transcribe("audio.wav", output_json=output)
+
+    assert result.returncode == 0
+    assert result.stdout == "raw output\n"
+    assert result.parsed_json is None
+    assert result.parse_error is not None
+    assert result.artifacts == {"transcript": output}
+
+
+def test_preexisting_unchanged_output_is_not_reported_or_parsed(tmp_path: Path) -> None:
+    output = tmp_path / "transcript.json"
+    output.write_text('{"text": "stale"}', encoding="utf-8")
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=_runner([], stdout='{"text": "fresh"}'),
+    )
+
+    result = bridge.transcribe("audio.wav", output_json=output)
+
+    assert result.parsed_json == {"text": "fresh"}
+    assert result.artifacts == {}
+
+
+def test_relative_artifact_is_resolved_against_command_cwd(tmp_path: Path) -> None:
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        assert cwd is not None
+        (cwd / "speech.wav").write_bytes(b"RIFF")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",), cwd=tmp_path),
+        runner=run,
+    )
+
+    result = bridge.vad_analyze("audio.wav", export_wav="speech.wav")
+
+    assert result.artifacts == {"speech_audio": tmp_path / "speech.wav"}
+
+
 def test_env_command_is_split(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[str]] = []
     monkeypatch.setenv("FLUID_BRIDGE_CLI", "/opt/bin/fluidaudiocli --json")
@@ -65,14 +200,28 @@ def test_env_command_is_split(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
-def test_package_path_is_last_discovery_option(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_package_path_is_last_discovery_option(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls: list[list[str]] = []
     monkeypatch.delenv("FLUID_BRIDGE_CLI", raising=False)
     monkeypatch.setenv("FLUID_AUDIO_PACKAGE", "/src/FluidAudio")
     monkeypatch.setattr("fluid_bridge.bridge.shutil.which", lambda name: None)
-    bridge = FluidAudioBridge(runner=_runner(calls))
+    output = tmp_path / "out.wav"
 
-    bridge.tts("Hello", "out.wav", backend="kokoro-ane")
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        output.write_bytes(b"RIFF")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    bridge = FluidAudioBridge(runner=run)
+
+    result = bridge.tts("Hello", output, backend="kokoro-ane")
 
     assert calls == [
         [
@@ -84,11 +233,41 @@ def test_package_path_is_last_discovery_option(monkeypatch: pytest.MonkeyPatch) 
             "tts",
             "Hello",
             "--output",
-            "out.wav",
+            str(output),
             "--backend",
             "kokoro-ane",
         ]
     ]
+    assert result.output_path == output
+    assert result.artifacts == {"audio": output}
+
+
+def test_vad_reports_exported_speech_audio_artifact(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+    output = tmp_path / "speech.wav"
+
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        output.write_bytes(b"RIFF")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=run,
+    )
+
+    result = bridge.vad_analyze("audio.wav", export_wav=output)
+
+    assert calls == [
+        ["fluidaudiocli", "vad-analyze", "audio.wav", "--export-wav", str(output)]
+    ]
+    assert result.output_path == output
+    assert result.artifacts == {"speech_audio": output}
 
 
 def test_run_live_uses_configured_invocation_context(tmp_path: Path) -> None:
@@ -216,7 +395,7 @@ def test_cli_capabilities_prints_machine_readable_report(
 def test_cli_transcribe_forwards_upstream_option_tail(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    calls: list[tuple[Path, str | None, list[str]]] = []
+    calls: list[tuple[Path, str | None, bool, str | None, Path | None, list[str]]] = []
 
     class FakeBridge:
         def transcribe(
@@ -224,9 +403,14 @@ def test_cli_transcribe_forwards_upstream_option_tail(
             audio: Path,
             *,
             model_version: str | None,
+            streaming: bool,
+            language: str | None,
+            output_json: Path | None,
             extra_args: Sequence[str],
         ) -> CommandResult:
-            calls.append((audio, model_version, list(extra_args)))
+            calls.append(
+                (audio, model_version, streaming, language, output_json, list(extra_args))
+            )
             return CommandResult(("fluidaudiocli", "transcribe"), 0, "done", "")
 
     monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())
@@ -237,10 +421,12 @@ def test_cli_transcribe_forwards_upstream_option_tail(
             "meeting.wav",
             "--model-version",
             "v3",
-            "--",
             "--streaming",
+            "--language",
+            "en",
             "--output-json",
             "transcript.json",
+            "--",
             "--future-flag",
         ]
     )
@@ -249,7 +435,10 @@ def test_cli_transcribe_forwards_upstream_option_tail(
         (
             Path("meeting.wav"),
             "v3",
-            ["--streaming", "--output-json", "transcript.json", "--future-flag"],
+            True,
+            "en",
+            Path("transcript.json"),
+            ["--future-flag"],
         )
     ]
     assert capsys.readouterr().out == "done\n"
@@ -260,11 +449,26 @@ def test_cli_transcribe_forwards_upstream_option_tail(
     ("argv", "expected_call"),
     [
         (
-            ["diarize", "meeting.wav", "--", "--export-embeddings", "vectors.json"],
-            ("diarize", ["--export-embeddings", "vectors.json"]),
+            [
+                "diarize",
+                "meeting.wav",
+                "--export-embeddings",
+                "vectors.json",
+                "--",
+                "--future-diarizer-flag",
+            ],
+            ("diarize", ["--future-diarizer-flag"]),
         ),
         (
-            ["vad", "meeting.wav", "--", "--min-silence-ms", "400"],
+            [
+                "vad",
+                "meeting.wav",
+                "--export-wav",
+                "speech.wav",
+                "--",
+                "--min-silence-ms",
+                "400",
+            ],
             ("vad", ["--min-silence-ms", "400"]),
         ),
         (
@@ -294,10 +498,12 @@ def test_cli_friendly_commands_forward_upstream_option_tail(
 
     class FakeBridge:
         def diarize(self, *args: object, **kwargs: object) -> CommandResult:
+            assert kwargs["export_embeddings"] == Path("vectors.json")
             calls.append(("diarize", list(kwargs["extra_args"])))
             return CommandResult(("fluidaudiocli", "process"), 0, "", "")
 
         def vad_analyze(self, *args: object, **kwargs: object) -> CommandResult:
+            assert kwargs["export_wav"] == Path("speech.wav")
             calls.append(("vad", list(kwargs["extra_args"])))
             return CommandResult(("fluidaudiocli", "vad-analyze"), 0, "", "")
 
@@ -324,6 +530,7 @@ def test_missing_cli_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_diarize_parses_output_json(tmp_path: Path) -> None:
     output = tmp_path / "result.json"
+    embeddings = tmp_path / "embeddings.json"
     payload = {"segments": [{"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"}]}
     calls: list[list[str]] = []
 
@@ -335,11 +542,18 @@ def test_diarize_parses_output_json(tmp_path: Path) -> None:
     ) -> subprocess.CompletedProcess[str]:
         calls.append(list(command))
         output.write_text(json.dumps(payload), encoding="utf-8")
+        embeddings.write_text("[]", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     bridge = FluidAudioBridge(FluidAudioCLIConfig(command=("fluidaudiocli",)), runner=run)
 
-    result = bridge.diarize("meeting.wav", mode="offline", threshold=0.6, output_path=output)
+    result = bridge.diarize(
+        "meeting.wav",
+        mode="offline",
+        threshold=0.6,
+        output_path=output,
+        export_embeddings=embeddings,
+    )
 
     assert result.parsed_json == payload
     assert calls == [
@@ -353,8 +567,43 @@ def test_diarize_parses_output_json(tmp_path: Path) -> None:
             "offline",
             "--threshold",
             "0.6",
+            "--export-embeddings",
+            str(embeddings),
         ]
     ]
+    assert result.artifacts == {
+        "diarization": output,
+        "embeddings": embeddings,
+    }
+
+
+def test_diarize_does_not_return_deleted_temporary_artifact() -> None:
+    payload = {"segments": []}
+    temporary_outputs: list[Path] = []
+
+    def run(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        output = Path(command[command.index("--output") + 1])
+        temporary_outputs.append(output)
+        output.write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=run,
+    )
+
+    result = bridge.diarize("meeting.wav")
+
+    assert result.parsed_json == payload
+    assert result.output_path is None
+    assert result.artifacts == {}
+    assert len(temporary_outputs) == 1
+    assert temporary_outputs[0].exists() is False
 
 
 def test_failed_command_preserves_stderr() -> None:
@@ -369,6 +618,27 @@ def test_failed_command_preserves_stderr() -> None:
     assert result.stderr == "model missing\n"
     with pytest.raises(FluidAudioBridgeError, match="model missing"):
         result.raise_for_error()
+
+
+def test_failed_command_does_not_claim_requested_artifacts(tmp_path: Path) -> None:
+    output = tmp_path / "missing.wav"
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=_runner([], stderr="model missing\n", returncode=2),
+    )
+
+    result = bridge.tts("Hello", output)
+
+    assert result.returncode == 2
+    assert result.output_path == output
+    assert result.artifacts == {}
+
+
+def test_command_result_preserves_legacy_positional_output_path() -> None:
+    result = CommandResult(("fluidaudiocli",), 0, "", "", None, Path("out.json"))
+
+    assert result.output_path == Path("out.json")
+    assert result.parse_error is None
 
 
 def test_failed_diarize_does_not_parse_non_json_stdout() -> None:

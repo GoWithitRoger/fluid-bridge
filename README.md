@@ -44,18 +44,40 @@ bridge = FluidAudioBridge()
 doctor = bridge.doctor()
 print(doctor.to_dict())
 
-transcript = bridge.transcribe("meeting.wav", model_version="v2")
-print(transcript.stdout)
+transcript = bridge.transcribe(
+    "meeting.wav",
+    model_version="v3",
+    streaming=True,
+    language="en",
+    output_json="transcript.json",
+)
+print(transcript.parsed_json)
+print(transcript.artifacts["transcript"])
 
-diarization = bridge.diarize("meeting.wav", mode="offline", threshold=0.6)
+diarization = bridge.diarize(
+    "meeting.wav",
+    mode="offline",
+    threshold=0.6,
+    output_path="diarization.json",
+    export_embeddings="embeddings.json",
+)
 print(diarization.parsed_json)
 
-vad = bridge.vad_analyze("meeting.wav", streaming=True, threshold=0.65)
+vad = bridge.vad_analyze(
+    "meeting.wav",
+    streaming=True,
+    threshold=0.65,
+    export_wav="speech.wav",
+)
 print(vad.stdout)
 
 tts = bridge.tts("Hello from FluidAudio.", "out.wav", backend="kokoro-ane")
 tts.raise_for_error()
 ```
+
+`CommandResult.artifacts` contains only files produced by a successful command. When requested JSON
+exists but cannot be decoded, `parsed_json` is `None`, `parse_error` describes the problem, and raw
+stdout/stderr remain available.
 
 For incremental Python output, start a streaming command and consume its stdout/stderr line events:
 
@@ -87,9 +109,9 @@ Friendly commands accept an upstream option tail after `--`. This keeps common o
 while leaving every FluidAudio option available:
 
 ```bash
-fluid-bridge transcribe meeting.wav --model-version v3 -- --streaming --output-json result.json
-fluid-bridge diarize meeting.wav -- --export-embeddings embeddings.json
-fluid-bridge vad meeting.wav -- --min-silence-ms 400 --pad-ms 100
+fluid-bridge transcribe meeting.wav --streaming --output-json result.json -- --custom-vocab terms.txt
+fluid-bridge diarize meeting.wav --export-embeddings embeddings.json -- --num-speakers 3
+fluid-bridge vad meeting.wav --export-wav speech.wav -- --min-silence-ms 400 --pad-ms 100
 fluid-bridge tts "Hello" --backend pocket --clone-voice speaker.wav --output out.wav -- --temperature 0.7
 ```
 

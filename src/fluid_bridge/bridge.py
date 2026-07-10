@@ -11,7 +11,7 @@ import signal
 import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -53,6 +53,8 @@ class CommandResult:
     stderr: str
     parsed_json: Any | None = None
     output_path: Path | None = None
+    artifacts: Mapping[str, Path] = field(default_factory=dict)
+    parse_error: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -122,16 +124,43 @@ class FluidAudioBridge:
         *,
         parse_json: bool = False,
         output_path: str | Path | None = None,
+        artifacts: Mapping[str, str | Path] | None = None,
     ) -> CommandResult:
         """Run FluidAudio CLI with ``args`` appended to the resolved command prefix."""
         command, env, cwd = self._prepare_invocation(args)
+        resolved_output_path = Path(output_path) if output_path is not None else None
+        io_output_path = self._resolve_io_path(resolved_output_path, cwd)
+        requested_artifacts = {
+            name: self._resolve_io_path(Path(path), cwd)
+            for name, path in (artifacts or {}).items()
+        }
+        prior_artifact_states = {
+            name: self._file_state(path) for name, path in requested_artifacts.items()
+        }
+        prior_output_state = self._file_state(io_output_path)
 
         proc = self._runner(command, env, cwd, self.config.timeout_s)
         parsed_json = None
-        resolved_output_path = Path(output_path) if output_path is not None else None
+        parse_error = None
 
         if parse_json and proc.returncode == 0:
-            parsed_json = self._parse_json(proc.stdout, resolved_output_path)
+            try:
+                parse_path = (
+                    io_output_path
+                    if self._file_state(io_output_path) != prior_output_state
+                    else None
+                )
+                parsed_json = self._parse_json(proc.stdout, parse_path)
+            except (OSError, ValueError) as exc:
+                parse_error = str(exc)
+
+        resolved_artifacts = {
+            name: path
+            for name, path in requested_artifacts.items()
+            if proc.returncode == 0
+            and path.is_file()
+            and self._file_state(path) != prior_artifact_states[name]
+        }
 
         return CommandResult(
             command=tuple(command),
@@ -139,7 +168,9 @@ class FluidAudioBridge:
             stdout=proc.stdout,
             stderr=proc.stderr,
             parsed_json=parsed_json,
+            parse_error=parse_error,
             output_path=resolved_output_path,
+            artifacts=resolved_artifacts,
         )
 
     def run_live(self, args: Sequence[str]) -> CommandResult:
@@ -173,15 +204,29 @@ class FluidAudioBridge:
         audio_path: str | Path,
         *,
         model_version: str | None = None,
+        streaming: bool = False,
+        language: str | None = None,
+        output_json: str | Path | None = None,
         extra_args: Sequence[str] | None = None,
     ) -> CommandResult:
         """Run ``fluidaudiocli transcribe`` for an audio file."""
         args = ["transcribe", str(audio_path)]
         if model_version:
             args += ["--model-version", model_version]
+        if streaming:
+            args.append("--streaming")
+        if language:
+            args += ["--language", language]
+        if output_json is not None:
+            args += ["--output-json", str(output_json)]
         if extra_args:
             args += list(extra_args)
-        return self.run(args)
+        return self.run(
+            args,
+            parse_json=output_json is not None,
+            output_path=output_json,
+            artifacts={"transcript": output_json} if output_json is not None else None,
+        )
 
     def diarize(
         self,
@@ -190,10 +235,12 @@ class FluidAudioBridge:
         mode: str | None = None,
         threshold: float | None = None,
         output_path: str | Path | None = None,
+        export_embeddings: str | Path | None = None,
         extra_args: Sequence[str] | None = None,
     ) -> CommandResult:
         """Run ``fluidaudiocli process`` and parse JSON output when available."""
         cleanup_path: Path | None = None
+        requested_output = output_path is not None
         if output_path is None:
             with tempfile.NamedTemporaryFile(
                 prefix="fluid-bridge-", suffix=".json", delete=False
@@ -207,11 +254,25 @@ class FluidAudioBridge:
             args += ["--mode", mode]
         if threshold is not None:
             args += ["--threshold", str(threshold)]
+        if export_embeddings is not None:
+            args += ["--export-embeddings", str(export_embeddings)]
         if extra_args:
             args += list(extra_args)
 
+        artifacts: dict[str, str | Path] = {}
+        if requested_output:
+            artifacts["diarization"] = resolved_output_path
+        if export_embeddings is not None:
+            artifacts["embeddings"] = export_embeddings
+
         try:
-            return self.run(args, parse_json=True, output_path=resolved_output_path)
+            result = self.run(
+                args,
+                parse_json=True,
+                output_path=resolved_output_path,
+                artifacts=artifacts,
+            )
+            return replace(result, output_path=None) if cleanup_path is not None else result
         finally:
             if cleanup_path is not None:
                 cleanup_path.unlink(missing_ok=True)
@@ -222,6 +283,7 @@ class FluidAudioBridge:
         *,
         streaming: bool = False,
         threshold: float | None = None,
+        export_wav: str | Path | None = None,
         extra_args: Sequence[str] | None = None,
     ) -> CommandResult:
         """Run ``fluidaudiocli vad-analyze`` for an audio file."""
@@ -230,9 +292,15 @@ class FluidAudioBridge:
             args.append("--streaming")
         if threshold is not None:
             args += ["--threshold", str(threshold)]
+        if export_wav is not None:
+            args += ["--export-wav", str(export_wav)]
         if extra_args:
             args += list(extra_args)
-        return self.run(args)
+        return self.run(
+            args,
+            output_path=export_wav,
+            artifacts={"speech_audio": export_wav} if export_wav is not None else None,
+        )
 
     def tts(
         self,
@@ -254,7 +322,11 @@ class FluidAudioBridge:
             args += ["--clone-voice", str(clone_voice)]
         if extra_args:
             args += list(extra_args)
-        return self.run(args, output_path=output_path)
+        return self.run(
+            args,
+            output_path=output_path,
+            artifacts={"audio": output_path},
+        )
 
     def doctor(self) -> DoctorReport:
         """Inspect the current machine for FluidAudio CLI prerequisites."""
@@ -329,6 +401,28 @@ class FluidAudioBridge:
         if not text:
             return None
         return json.loads(text)
+
+    @staticmethod
+    def _resolve_io_path(path: Path | None, cwd: Path | None) -> Path | None:
+        if path is None or path.is_absolute() or cwd is None:
+            return path
+        return cwd / path
+
+    @staticmethod
+    def _file_state(path: Path | None) -> tuple[int, int, int, int, int] | None:
+        if path is None:
+            return None
+        try:
+            stat = path.stat()
+        except OSError:
+            return None
+        return (
+            stat.st_dev,
+            stat.st_ino,
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ctime_ns,
+        )
 
     @staticmethod
     def _swift_version(swift_path: str | None) -> str | None:

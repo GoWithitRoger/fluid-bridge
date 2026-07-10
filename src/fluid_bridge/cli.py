@@ -51,6 +51,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = bridge.transcribe(
                 args.audio,
                 model_version=args.model_version,
+                streaming=args.streaming,
+                language=args.language,
+                output_json=args.output_json,
                 extra_args=upstream_args,
             )
         elif args.command == "diarize":
@@ -59,6 +62,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 mode=args.mode,
                 threshold=args.threshold,
                 output_path=args.output,
+                export_embeddings=args.export_embeddings,
                 extra_args=upstream_args,
             )
         elif args.command == "vad":
@@ -66,6 +70,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.audio,
                 streaming=args.streaming,
                 threshold=args.threshold,
+                export_wav=args.export_wav,
                 extra_args=upstream_args,
             )
         elif args.command == "tts":
@@ -110,17 +115,22 @@ def _build_parser() -> argparse.ArgumentParser:
     transcribe = subparsers.add_parser("transcribe", help="Run FluidAudio batch transcription.")
     transcribe.add_argument("audio", type=Path)
     transcribe.add_argument("--model-version")
+    transcribe.add_argument("--streaming", action="store_true")
+    transcribe.add_argument("--language")
+    transcribe.add_argument("--output-json", type=Path)
 
     diarize = subparsers.add_parser("diarize", help="Run FluidAudio diarization via process.")
     diarize.add_argument("audio", type=Path)
     diarize.add_argument("--mode", choices=["streaming", "offline"])
     diarize.add_argument("--threshold", type=float)
     diarize.add_argument("--output", type=Path)
+    diarize.add_argument("--export-embeddings", type=Path)
 
     vad = subparsers.add_parser("vad", help="Run FluidAudio VAD analysis.")
     vad.add_argument("audio", type=Path)
     vad.add_argument("--streaming", action="store_true")
     vad.add_argument("--threshold", type=float)
+    vad.add_argument("--export-wav", type=Path)
 
     tts = subparsers.add_parser("tts", help="Run FluidAudio text-to-speech.")
     tts.add_argument("text")
