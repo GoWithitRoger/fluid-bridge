@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">fluid-bridge project mark</title>
+  <desc id="desc">Two terminal endpoints connected by a fluid audio waveform.</desc>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path
+      d="m104 176-48 80 48 80"
+      stroke="#22C7D6"
+      stroke-width="28"
+    />
+    <path
+      d="m408 176 48 80-48 80"
+      stroke="#FF5A52"
+      stroke-width="28"
+    />
+
+    <path
+      d="M120 256h14c22 0 24-32 44-32s22 64 44 64 22-96 34-96 12 96 34 96 24-64 44-64 22 32 44 32h14"
+      stroke="#17202A"
+      stroke-width="24"
+    />
+  </g>
+</svg>

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/fluid-bridge-mark.svg" width="176" alt="fluid-bridge mark">
+</p>
+
 # fluid-bridge
 
 Unofficial Python bindings for [FluidAudio](https://github.com/FluidInference/FluidAudio)'s
