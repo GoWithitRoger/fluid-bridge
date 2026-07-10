@@ -12,6 +12,10 @@ embedding Swift or Rust in the Python runtime. The first public release focuses 
 conservative result handling; future releases may add an optional Rust/PyO3 backend over
 [`fluidaudio-rs`](https://github.com/FluidInference/fluidaudio-rs).
 
+The support contract is complete **CLI transport parity**, not a duplicate implementation of the
+FluidAudio Swift SDK. See the [full capability matrix](docs/CAPABILITIES.md) and
+[validation guide](docs/VALIDATION.md).
+
 ## Install
 
 ```bash
@@ -214,6 +218,6 @@ storage cost, model-download policy, and benchmark limits, for example:
 ```bash
 fluid-bridge raw -- download --dataset ami-sdm
 fluid-bridge raw -- asr-benchmark --subset test-clean --max-files 10
-fluid-bridge raw -- diarization-benchmark --dataset ami --single-file ES2004a
+fluid-bridge raw -- diarization-benchmark --dataset ami-sdm --single-file ES2004a
 fluid-bridge raw -- tts-benchmark --backend kokoro-ane --skip-asr
 ```
