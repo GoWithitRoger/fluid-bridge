@@ -8,6 +8,7 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -539,17 +540,17 @@ def test_cli_friendly_commands_forward_upstream_option_tail(
     class FakeBridge:
         def diarize(self, *args: object, **kwargs: object) -> CommandResult:
             assert kwargs["export_embeddings"] == Path("vectors.json")
-            calls.append(("diarize", list(kwargs["extra_args"])))
+            calls.append(("diarize", list(cast(Sequence[str], kwargs["extra_args"]))))
             return CommandResult(("fluidaudiocli", "process"), 0, "", "")
 
         def vad_analyze(self, *args: object, **kwargs: object) -> CommandResult:
             assert kwargs["export_wav"] == Path("speech.wav")
-            calls.append(("vad", list(kwargs["extra_args"])))
+            calls.append(("vad", list(cast(Sequence[str], kwargs["extra_args"]))))
             return CommandResult(("fluidaudiocli", "vad-analyze"), 0, "", "")
 
         def tts(self, *args: object, **kwargs: object) -> CommandResult:
             assert kwargs["clone_voice"] == Path("speaker.wav")
-            calls.append(("tts", list(kwargs["extra_args"])))
+            calls.append(("tts", list(cast(Sequence[str], kwargs["extra_args"]))))
             return CommandResult(("fluidaudiocli", "tts"), 0, "", "")
 
     monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())

@@ -12,7 +12,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from threading import Lock, Thread
 from time import monotonic
-from typing import Literal, NoReturn, TextIO
+from typing import IO, Literal, NoReturn
 
 from fluid_bridge.bridge import CommandResult, FluidAudioBridgeError
 
@@ -151,7 +151,7 @@ class StreamingCommand:
 
     def _start_reader(
         self,
-        pipe: TextIO | None,
+        pipe: IO[str] | None,
         stream: Literal["stdout", "stderr"],
         output: list[str],
     ) -> Thread:

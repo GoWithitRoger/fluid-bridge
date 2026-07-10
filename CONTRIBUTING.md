@@ -5,7 +5,7 @@ Thanks for helping improve `fluid-bridge`.
 ## Setup
 
 ```bash
-uv sync --all-extras
+uv sync --all-extras --locked
 ```
 
 ## Checks
@@ -13,6 +13,7 @@ uv sync --all-extras
 ```bash
 uv run pytest
 uv run ruff check .
+uv run ty check
 ```
 
 Tests should not require FluidAudio model downloads by default. Add live FluidAudio checks only when

@@ -13,7 +13,7 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from fluid_bridge.capabilities import (
     UNSAFE_HELP_COMMANDS,
@@ -605,6 +605,14 @@ class FluidAudioBridge:
         if not text:
             return None
         return json.loads(text)
+
+    @staticmethod
+    @overload
+    def _resolve_io_path(path: Path, cwd: Path | None) -> Path: ...
+
+    @staticmethod
+    @overload
+    def _resolve_io_path(path: None, cwd: Path | None) -> None: ...
 
     @staticmethod
     def _resolve_io_path(path: Path | None, cwd: Path | None) -> Path | None:

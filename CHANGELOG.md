@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added locked, uv-managed `ty` type checking to local validation and macOS CI.
+- Tightened artifact-path and streaming-pipe annotations to satisfy the checked public interface.
+
 ## 0.2.0 - 2026-07-09
 
 - Added lossless raw and interactive passthrough for every FluidAudio CLI command and option.

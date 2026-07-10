@@ -8,6 +8,7 @@ actual macOS FluidAudio installation and, for inference, explicit consent to mod
 ```bash
 uv run pytest
 uv run ruff check .
+uv run ty check
 ```
 
 These tests use fake subprocesses. They cover discovery precedence, raw and live passthrough,
@@ -75,6 +76,7 @@ Before publishing:
 ```bash
 uv run pytest
 uv run ruff check .
+uv run ty check
 uv build
 ```
 

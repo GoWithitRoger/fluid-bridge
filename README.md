@@ -21,7 +21,7 @@ FluidAudio Swift SDK. See the [full capability matrix](docs/CAPABILITIES.md) and
 ```bash
 git clone https://github.com/GoWithitRoger/fluid-bridge.git
 cd fluid-bridge
-uv sync --all-extras
+uv sync --all-extras --locked
 ```
 
 FluidAudio itself is not bundled. Use one of these setup paths:
@@ -180,9 +180,10 @@ official FluidAudio CLI, not an application pipeline.
 ## Development
 
 ```bash
-uv sync --all-extras
+uv sync --all-extras --locked
 uv run pytest
 uv run ruff check .
+uv run ty check
 ```
 
 Default tests do not download FluidAudio models or run live inference.
