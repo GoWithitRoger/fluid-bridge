@@ -67,6 +67,20 @@ fluid-bridge vad meeting.wav --streaming --threshold 0.65
 fluid-bridge tts "Hello from FluidAudio." --backend kokoro-ane --output out.wav
 ```
 
+Use `raw --` to run any upstream FluidAudio command with its arguments unchanged. This is the full
+CLI compatibility path, including commands and options that do not yet have a friendly
+`fluid-bridge` subcommand:
+
+```bash
+fluid-bridge raw -- parakeet-eou --input meeting.wav
+fluid-bridge raw -- nemotron-transcribe --input meeting.wav --chunk-ms 160
+fluid-bridge raw -- sortformer meeting.wav --offline --output speakers.json
+fluid-bridge raw -- download --dataset ami-sdm
+```
+
+Raw mode preserves FluidAudio's stdout, stderr, and exit status. The Python equivalent is
+`FluidAudioBridge.run(["command", "--option", "value"])`.
+
 ## Relationship To FluidAudio
 
 This project is an unofficial Python adapter. FluidAudio is upstream-owned by Fluid Inference and
@@ -88,4 +102,3 @@ uv run ruff check .
 ```
 
 Default tests do not download FluidAudio models or run live inference.
-

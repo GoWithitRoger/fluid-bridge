@@ -174,3 +174,41 @@ def test_cli_diarize_failure_preserves_output(
     assert code == 2
     assert captured.out == "not json\n"
     assert captured.err == "bad input\n"
+
+
+def test_cli_raw_forwards_arguments_and_preserves_process_result(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[list[str]] = []
+
+    class FakeBridge:
+        def run(self, args: Sequence[str]) -> CommandResult:
+            calls.append(list(args))
+            return CommandResult(
+                command=("fluidaudiocli", *args),
+                returncode=7,
+                stdout="partial output",
+                stderr="upstream failure",
+            )
+
+    monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())
+
+    code = cli_main(
+        [
+            "raw",
+            "--",
+            "nemotron-transcribe",
+            "--input",
+            "audio.wav",
+            "--chunk-ms",
+            "160",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert calls == [
+        ["nemotron-transcribe", "--input", "audio.wav", "--chunk-ms", "160"]
+    ]
+    assert captured.out == "partial output"
+    assert captured.err == "upstream failure"
+    assert code == 7

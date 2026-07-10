@@ -21,7 +21,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "doctor":
             print(json.dumps(bridge.doctor().to_dict(), indent=2, sort_keys=True))
             return 0
-        if args.command == "transcribe":
+        if args.command == "raw":
+            raw_args = args.args[1:] if args.args[:1] == ["--"] else args.args
+            result = bridge.run(raw_args)
+            if result.stderr:
+                sys.stderr.write(result.stderr)
+            if result.stdout:
+                sys.stdout.write(result.stdout)
+            return result.returncode
+        elif args.command == "transcribe":
             result = bridge.transcribe(args.audio, model_version=args.model_version)
         elif args.command == "diarize":
             result = bridge.diarize(
@@ -59,6 +67,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("doctor", help="Report FluidAudio CLI setup status.")
 
+    raw = subparsers.add_parser("raw", help="Run any FluidAudio CLI command.")
+    raw.add_argument("args", nargs=argparse.REMAINDER)
+
     transcribe = subparsers.add_parser("transcribe", help="Run FluidAudio batch transcription.")
     transcribe.add_argument("audio", type=Path)
     transcribe.add_argument("--model-version")
@@ -85,4 +96,3 @@ def _build_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
