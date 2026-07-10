@@ -12,11 +12,16 @@ from pathlib import Path
 
 from fluid_bridge.bridge import FluidAudioBridge, FluidAudioBridgeError
 
+_FRIENDLY_COMMANDS = frozenset({"transcribe", "diarize", "vad", "tts"})
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the fluid-bridge CLI."""
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    parse_argv, upstream_args = _split_upstream_args(
+        list(argv) if argv is not None else sys.argv[1:]
+    )
+    args = parser.parse_args(parse_argv)
     bridge = FluidAudioBridge()
 
     try:
@@ -43,18 +48,35 @@ def main(argv: Sequence[str] | None = None) -> int:
                 signal.raise_signal(signal_number)
             return result.returncode
         elif args.command == "transcribe":
-            result = bridge.transcribe(args.audio, model_version=args.model_version)
+            result = bridge.transcribe(
+                args.audio,
+                model_version=args.model_version,
+                extra_args=upstream_args,
+            )
         elif args.command == "diarize":
             result = bridge.diarize(
                 args.audio,
                 mode=args.mode,
                 threshold=args.threshold,
                 output_path=args.output,
+                extra_args=upstream_args,
             )
         elif args.command == "vad":
-            result = bridge.vad_analyze(args.audio, streaming=args.streaming, threshold=args.threshold)
+            result = bridge.vad_analyze(
+                args.audio,
+                streaming=args.streaming,
+                threshold=args.threshold,
+                extra_args=upstream_args,
+            )
         elif args.command == "tts":
-            result = bridge.tts(args.text, args.output, backend=args.backend, language=args.language)
+            result = bridge.tts(
+                args.text,
+                args.output,
+                backend=args.backend,
+                language=args.language,
+                clone_voice=args.clone_voice,
+                extra_args=upstream_args,
+            )
         else:
             parser.print_help()
             return 2
@@ -105,8 +127,16 @@ def _build_parser() -> argparse.ArgumentParser:
     tts.add_argument("--output", required=True, type=Path)
     tts.add_argument("--backend")
     tts.add_argument("--language")
+    tts.add_argument("--clone-voice", type=Path)
 
     return parser
+
+
+def _split_upstream_args(argv: list[str]) -> tuple[list[str], list[str]]:
+    if not argv or argv[0] not in _FRIENDLY_COMMANDS or "--" not in argv:
+        return argv, []
+    separator = argv.index("--")
+    return argv[:separator], argv[separator + 1 :]
 
 
 if __name__ == "__main__":

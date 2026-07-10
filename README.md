@@ -68,6 +68,16 @@ fluid-bridge vad meeting.wav --streaming --threshold 0.65
 fluid-bridge tts "Hello from FluidAudio." --backend kokoro-ane --output out.wav
 ```
 
+Friendly commands accept an upstream option tail after `--`. This keeps common options concise
+while leaving every FluidAudio option available:
+
+```bash
+fluid-bridge transcribe meeting.wav --model-version v3 -- --streaming --output-json result.json
+fluid-bridge diarize meeting.wav -- --export-embeddings embeddings.json
+fluid-bridge vad meeting.wav -- --min-silence-ms 400 --pad-ms 100
+fluid-bridge tts "Hello" --backend pocket --clone-voice speaker.wav --output out.wav -- --temperature 0.7
+```
+
 Use `raw --` to run any upstream FluidAudio command with its arguments unchanged. This is the full
 CLI compatibility path, including commands and options that do not yet have a friendly
 `fluid-bridge` subcommand:

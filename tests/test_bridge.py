@@ -213,6 +213,105 @@ def test_cli_capabilities_prints_machine_readable_report(
     assert code == 0
 
 
+def test_cli_transcribe_forwards_upstream_option_tail(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[tuple[Path, str | None, list[str]]] = []
+
+    class FakeBridge:
+        def transcribe(
+            self,
+            audio: Path,
+            *,
+            model_version: str | None,
+            extra_args: Sequence[str],
+        ) -> CommandResult:
+            calls.append((audio, model_version, list(extra_args)))
+            return CommandResult(("fluidaudiocli", "transcribe"), 0, "done", "")
+
+    monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())
+
+    code = cli_main(
+        [
+            "transcribe",
+            "meeting.wav",
+            "--model-version",
+            "v3",
+            "--",
+            "--streaming",
+            "--output-json",
+            "transcript.json",
+            "--future-flag",
+        ]
+    )
+
+    assert calls == [
+        (
+            Path("meeting.wav"),
+            "v3",
+            ["--streaming", "--output-json", "transcript.json", "--future-flag"],
+        )
+    ]
+    assert capsys.readouterr().out == "done\n"
+    assert code == 0
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_call"),
+    [
+        (
+            ["diarize", "meeting.wav", "--", "--export-embeddings", "vectors.json"],
+            ("diarize", ["--export-embeddings", "vectors.json"]),
+        ),
+        (
+            ["vad", "meeting.wav", "--", "--min-silence-ms", "400"],
+            ("vad", ["--min-silence-ms", "400"]),
+        ),
+        (
+            [
+                "tts",
+                "Hello",
+                "--output",
+                "voice.wav",
+                "--backend",
+                "pocket",
+                "--clone-voice",
+                "speaker.wav",
+                "--",
+                "--temperature",
+                "0.7",
+            ],
+            ("tts", ["--temperature", "0.7"]),
+        ),
+    ],
+)
+def test_cli_friendly_commands_forward_upstream_option_tail(
+    argv: list[str],
+    expected_call: tuple[str, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, list[str]]] = []
+
+    class FakeBridge:
+        def diarize(self, *args: object, **kwargs: object) -> CommandResult:
+            calls.append(("diarize", list(kwargs["extra_args"])))
+            return CommandResult(("fluidaudiocli", "process"), 0, "", "")
+
+        def vad_analyze(self, *args: object, **kwargs: object) -> CommandResult:
+            calls.append(("vad", list(kwargs["extra_args"])))
+            return CommandResult(("fluidaudiocli", "vad-analyze"), 0, "", "")
+
+        def tts(self, *args: object, **kwargs: object) -> CommandResult:
+            assert kwargs["clone_voice"] == Path("speaker.wav")
+            calls.append(("tts", list(kwargs["extra_args"])))
+            return CommandResult(("fluidaudiocli", "tts"), 0, "", "")
+
+    monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())
+
+    assert cli_main(argv) == 0
+    assert calls == [expected_call]
+
+
 def test_missing_cli_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FLUID_BRIDGE_CLI", raising=False)
     monkeypatch.delenv("FLUID_AUDIO_PACKAGE", raising=False)
