@@ -26,8 +26,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         if args.command == "doctor":
-            print(json.dumps(bridge.doctor().to_dict(), indent=2, sort_keys=True))
-            return 0
+            report = bridge.doctor(probe_cli=args.probe)
+            print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+            return 1 if report.ready is False else 0
         if args.command == "capabilities":
             report = (
                 bridge.deep_capabilities(include_additional=args.include_additional)
@@ -109,7 +110,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("doctor", help="Report FluidAudio CLI setup status.")
+    doctor = subparsers.add_parser("doctor", help="Report FluidAudio CLI setup status.")
+    doctor.add_argument(
+        "--probe", action="store_true", help="Execute non-invasive FluidAudio root help."
+    )
     capabilities = subparsers.add_parser(
         "capabilities", help="Compare installed commands with the baseline."
     )

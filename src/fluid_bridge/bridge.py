@@ -13,7 +13,7 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fluid_bridge.capabilities import (
     UNSAFE_HELP_COMMANDS,
@@ -78,6 +78,25 @@ class CommandResult:
 
 
 @dataclass(frozen=True)
+class DoctorFinding:
+    """Actionable environment finding from a doctor inspection."""
+
+    code: str
+    severity: Literal["warning", "error"]
+    message: str
+    action: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a JSON-serializable finding."""
+        return {
+            "code": self.code,
+            "severity": self.severity,
+            "message": self.message,
+            "action": self.action,
+        }
+
+
+@dataclass(frozen=True)
 class DoctorReport:
     """Environment report for FluidAudio CLI setup."""
 
@@ -91,6 +110,27 @@ class DoctorReport:
     configured_command: tuple[str, ...] | None
     resolved_command: tuple[str, ...] | None
     model_cache_note: str
+    developer_dir: str | None = None
+    probe_command: tuple[str, ...] | None = None
+    probe_returncode: int | None = None
+    probe_stdout: str = ""
+    probe_stderr: str = ""
+    probe_error: str | None = None
+    findings: tuple[DoctorFinding, ...] = ()
+
+    @property
+    def probe_attempted(self) -> bool:
+        """Return whether an executable CLI probe was requested and prepared."""
+        return self.probe_command is not None
+
+    @property
+    def ready(self) -> bool | None:
+        """Return readiness, or None when executable readiness was not probed."""
+        if any(finding.severity == "error" for finding in self.findings):
+            return False
+        if not self.probe_attempted:
+            return None
+        return self.probe_error is None and self.probe_returncode == 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable report."""
@@ -107,6 +147,15 @@ class DoctorReport:
             else None,
             "resolved_command": list(self.resolved_command) if self.resolved_command else None,
             "model_cache_note": self.model_cache_note,
+            "developer_dir": self.developer_dir,
+            "probe_attempted": self.probe_attempted,
+            "probe_command": list(self.probe_command) if self.probe_command else None,
+            "probe_returncode": self.probe_returncode,
+            "probe_stdout": self.probe_stdout,
+            "probe_stderr": self.probe_stderr,
+            "probe_error": self.probe_error,
+            "ready": self.ready,
+            "findings": [finding.to_dict() for finding in self.findings],
         }
 
 
@@ -334,16 +383,114 @@ class FluidAudioBridge:
             artifacts={"audio": output_path},
         )
 
-    def doctor(self) -> DoctorReport:
-        """Inspect the current machine for FluidAudio CLI prerequisites."""
+    def doctor(self, *, probe_cli: bool = False) -> DoctorReport:
+        """Inspect prerequisites and optionally execute non-invasive root help."""
         swift_path = shutil.which("swift")
         swift_version = self._swift_version(swift_path)
         fluidaudio_cli_path = shutil.which("fluidaudiocli")
+        developer_dir = self._developer_dir()
         resolved_command: tuple[str, ...] | None
         try:
             resolved_command = tuple(self._resolve_command())
         except FluidAudioBridgeError:
             resolved_command = None
+
+        findings: list[DoctorFinding] = []
+        if platform.system() != "Darwin":
+            findings.append(
+                DoctorFinding(
+                    code="macos_required",
+                    severity="error",
+                    message="FluidAudioCLI is supported only on macOS.",
+                    action="Run fluid-bridge on a supported macOS host.",
+                )
+            )
+        if resolved_command is None:
+            findings.append(
+                DoctorFinding(
+                    code="cli_not_configured",
+                    severity="error",
+                    message="No FluidAudio CLI command could be resolved.",
+                    action=(
+                        "Put fluidaudiocli on PATH, set FLUID_AUDIO_PACKAGE, or set "
+                        "FLUID_BRIDGE_CLI."
+                    ),
+                )
+            )
+
+        uses_swift = bool(resolved_command and Path(resolved_command[0]).name == "swift")
+        if uses_swift and swift_path is None:
+            findings.append(
+                DoctorFinding(
+                    code="swift_not_found",
+                    severity="error",
+                    message="The configured FluidAudio command requires Swift, but Swift was not found.",
+                    action="Install Xcode and select its developer directory with xcode-select.",
+                )
+            )
+        elif uses_swift and developer_dir and "CommandLineTools" in developer_dir:
+            findings.append(
+                DoctorFinding(
+                    code="command_line_tools_selected",
+                    severity="warning",
+                    message="xcode-select points to Command Line Tools rather than a full Xcode toolchain.",
+                    action=(
+                        "If Swift cannot build FluidAudio, install a matching Xcode release and select "
+                        "its Contents/Developer directory."
+                    ),
+                )
+            )
+
+        probe_command: tuple[str, ...] | None = None
+        probe_returncode: int | None = None
+        probe_stdout = ""
+        probe_stderr = ""
+        probe_error: str | None = None
+        if probe_cli and resolved_command is not None:
+            command, env, cwd = self._prepare_invocation(["--help"])
+            probe_command = tuple(command)
+            try:
+                proc = self._runner(command, env, cwd, self.config.timeout_s)
+            except (FluidAudioBridgeError, OSError, subprocess.SubprocessError) as exc:
+                probe_error = str(exc)
+                findings.append(
+                    DoctorFinding(
+                        code="cli_probe_error",
+                        severity="error",
+                        message="FluidAudio CLI root help could not be executed.",
+                        action="Inspect probe_error and verify the configured command and timeout.",
+                    )
+                )
+            else:
+                probe_returncode = proc.returncode
+                probe_stdout = proc.stdout or ""
+                probe_stderr = proc.stderr or ""
+                if proc.returncode != 0:
+                    combined_output = "\n".join((probe_stdout, probe_stderr))
+                    if self._is_swift_toolchain_mismatch(combined_output):
+                        findings.append(
+                            DoctorFinding(
+                                code="swift_toolchain_mismatch",
+                                severity="error",
+                                message=(
+                                    "The selected Swift compiler is incompatible with the macOS SDK "
+                                    "used to build FluidAudio."
+                                ),
+                                action=(
+                                    "Select an Xcode toolchain whose Swift compiler matches its SDK, "
+                                    "then rerun doctor --probe."
+                                ),
+                            )
+                        )
+                    else:
+                        findings.append(
+                            DoctorFinding(
+                                code="cli_probe_failed",
+                                severity="error",
+                                message=f"FluidAudio CLI root help exited with {proc.returncode}.",
+                                action="Inspect probe_stdout and probe_stderr for the upstream failure.",
+                            )
+                        )
 
         return DoctorReport(
             platform=platform.platform(),
@@ -359,6 +506,13 @@ class FluidAudioBridge:
                 "FluidAudio downloads and caches models on first use; see FluidAudio upstream "
                 "documentation for registry, proxy, and offline-mode controls."
             ),
+            developer_dir=developer_dir,
+            probe_command=probe_command,
+            probe_returncode=probe_returncode,
+            probe_stdout=probe_stdout,
+            probe_stderr=probe_stderr,
+            probe_error=probe_error,
+            findings=tuple(findings),
         )
 
     def capabilities(self) -> CapabilityReport:
@@ -476,6 +630,27 @@ class FluidAudioBridge:
         except (OSError, subprocess.TimeoutExpired):
             return None
         return proc.stdout.strip().splitlines()[0] if proc.stdout.strip() else None
+
+    @staticmethod
+    def _developer_dir() -> str | None:
+        try:
+            proc = subprocess.run(
+                ["xcode-select", "-p"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return proc.stdout.strip() or None if proc.returncode == 0 else None
+
+    @staticmethod
+    def _is_swift_toolchain_mismatch(output: str) -> bool:
+        text = output.lower()
+        return (
+            "compiled with swift" in text and "cannot be imported by the swift" in text
+        ) or "sdk is not supported by the compiler" in text
 
     @staticmethod
     def _subprocess_runner(

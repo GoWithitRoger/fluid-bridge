@@ -41,7 +41,7 @@ from fluid_bridge import FluidAudioBridge
 
 bridge = FluidAudioBridge()
 
-doctor = bridge.doctor()
+doctor = bridge.doctor(probe_cli=True)
 print(doctor.to_dict())
 
 transcript = bridge.transcribe(
@@ -98,6 +98,7 @@ applies one deadline across event iteration and `wait()`.
 
 ```bash
 fluid-bridge doctor
+fluid-bridge doctor --probe
 fluid-bridge capabilities
 fluid-bridge capabilities --deep
 fluid-bridge capabilities --deep --include-additional
@@ -153,6 +154,11 @@ commands do not implement non-invasive `--help`; the report marks them as skippe
 model, corpus, or dataset downloads. Their full argument surfaces remain available through raw mode.
 Newly advertised commands are reported but not executed unless `--include-additional` is explicit,
 because the bridge cannot yet know whether their help paths are free of side effects.
+
+`doctor` reports platform, CLI discovery, Swift, and `xcode-select` state without running FluidAudio.
+Add `--probe` (or `probe_cli=True` in Python) to execute root help and receive a readiness result plus
+the exact command, exit status, stdout, stderr, and actionable findings. The probe recognizes common
+Swift compiler/SDK incompatibility messages and keeps the original toolchain diagnostics intact.
 
 ## Relationship To FluidAudio
 

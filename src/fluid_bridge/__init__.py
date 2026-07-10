@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fluid_bridge.bridge import (
     CommandResult,
+    DoctorFinding,
     DoctorReport,
     FluidAudioBridge,
     FluidAudioBridgeError,
@@ -19,6 +20,7 @@ __all__ = [
     "CapabilityReport",
     "CommandCapability",
     "CommandResult",
+    "DoctorFinding",
     "DoctorReport",
     "DeepCapabilityReport",
     "FluidAudioBridge",
