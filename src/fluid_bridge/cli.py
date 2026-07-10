@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from collections.abc import Sequence
+from contextlib import suppress
 from pathlib import Path
 
 from fluid_bridge.bridge import FluidAudioBridge, FluidAudioBridgeError
@@ -23,11 +25,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "raw":
             raw_args = args.args[1:] if args.args[:1] == ["--"] else args.args
-            result = bridge.run(raw_args)
+            result = bridge.run_live(raw_args) if args.live else bridge.run(raw_args)
             if result.stderr:
                 sys.stderr.write(result.stderr)
             if result.stdout:
                 sys.stdout.write(result.stdout)
+            if args.live and result.returncode < 0:
+                signal_number = -result.returncode
+                if signal_number not in signal.valid_signals():
+                    return 128 + signal_number
+                with suppress(OSError, RuntimeError, ValueError):
+                    signal.signal(signal_number, signal.SIG_DFL)
+                signal.raise_signal(signal_number)
             return result.returncode
         elif args.command == "transcribe":
             result = bridge.transcribe(args.audio, model_version=args.model_version)
@@ -68,6 +77,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("doctor", help="Report FluidAudio CLI setup status.")
 
     raw = subparsers.add_parser("raw", help="Run any FluidAudio CLI command.")
+    raw.add_argument("--live", action="store_true", help="Inherit terminal input and output.")
     raw.add_argument("args", nargs=argparse.REMAINDER)
 
     transcribe = subparsers.add_parser("transcribe", help="Run FluidAudio batch transcription.")

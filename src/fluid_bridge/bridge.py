@@ -7,6 +7,7 @@ import os
 import platform
 import shlex
 import shutil
+import signal
 import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -104,9 +105,11 @@ class FluidAudioBridge:
         config: FluidAudioCLIConfig | None = None,
         *,
         runner: Runner | None = None,
+        live_runner: Runner | None = None,
     ) -> None:
         self.config = config or FluidAudioCLIConfig()
         self._runner = runner or self._subprocess_runner
+        self._live_runner = live_runner or self._subprocess_live_runner
 
     def run(
         self,
@@ -116,10 +119,7 @@ class FluidAudioBridge:
         output_path: str | Path | None = None,
     ) -> CommandResult:
         """Run FluidAudio CLI with ``args`` appended to the resolved command prefix."""
-        command = [*self._resolve_command(), *map(str, args)]
-        env = os.environ.copy()
-        env.update(self.config.env)
-        cwd = Path(self.config.cwd) if self.config.cwd is not None else None
+        command, env, cwd = self._prepare_invocation(args)
 
         proc = self._runner(command, env, cwd, self.config.timeout_s)
         parsed_json = None
@@ -135,6 +135,25 @@ class FluidAudioBridge:
             stderr=proc.stderr,
             parsed_json=parsed_json,
             output_path=resolved_output_path,
+        )
+
+    def run_live(self, args: Sequence[str]) -> CommandResult:
+        """Run FluidAudio CLI with stdin, stdout, and stderr inherited from the caller."""
+        command, env, cwd = self._prepare_invocation(args)
+        try:
+            proc = self._live_runner(command, env, cwd, self.config.timeout_s)
+        except KeyboardInterrupt:
+            return CommandResult(
+                command=tuple(command),
+                returncode=-signal.SIGINT,
+                stdout="",
+                stderr="",
+            )
+        return CommandResult(
+            command=tuple(command),
+            returncode=proc.returncode,
+            stdout=proc.stdout or "",
+            stderr=proc.stderr or "",
         )
 
     def transcribe(
@@ -252,6 +271,15 @@ class FluidAudioBridge:
             ),
         )
 
+    def _prepare_invocation(
+        self, args: Sequence[str]
+    ) -> tuple[list[str], dict[str, str], Path | None]:
+        command = [*self._resolve_command(), *map(str, args)]
+        env = os.environ.copy()
+        env.update(self.config.env)
+        cwd = Path(self.config.cwd) if self.config.cwd is not None else None
+        return command, env, cwd
+
     def _resolve_command(self) -> list[str]:
         if self.config.command:
             return list(self.config.command)
@@ -311,6 +339,22 @@ class FluidAudioBridge:
         return subprocess.run(
             list(command),
             capture_output=True,
+            cwd=cwd,
+            env=dict(env),
+            text=True,
+            timeout=timeout_s,
+            check=False,
+        )
+
+    @staticmethod
+    def _subprocess_live_runner(
+        command: Sequence[str],
+        env: Mapping[str, str],
+        cwd: Path | None,
+        timeout_s: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            list(command),
             cwd=cwd,
             env=dict(env),
             text=True,

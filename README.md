@@ -81,6 +81,15 @@ fluid-bridge raw -- download --dataset ami-sdm
 Raw mode preserves FluidAudio's stdout, stderr, and exit status. The Python equivalent is
 `FluidAudioBridge.run(["command", "--option", "value"])`.
 
+Add `--live` before the separator for interactive or long-running commands. Live mode inherits
+stdin, stdout, and stderr so progress appears immediately, and it mirrors FluidAudio's signal exit:
+
+```bash
+fluid-bridge raw --live -- multi-stream microphone.wav system-audio.wav
+```
+
+The Python equivalent is `FluidAudioBridge.run_live(...)`.
+
 ## Relationship To FluidAudio
 
 This project is an unofficial Python adapter. FluidAudio is upstream-owned by Fluid Inference and
