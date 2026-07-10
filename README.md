@@ -99,6 +99,8 @@ applies one deadline across event iteration and `wait()`.
 ```bash
 fluid-bridge doctor
 fluid-bridge capabilities
+fluid-bridge capabilities --deep
+fluid-bridge capabilities --deep --include-additional
 fluid-bridge transcribe meeting.wav --model-version v2
 fluid-bridge diarize meeting.wav --mode offline --threshold 0.6
 fluid-bridge vad meeting.wav --streaming --threshold 0.65
@@ -144,6 +146,13 @@ from FluidAudio commit `372eb32a`. FluidAudio's root help does not list every re
 proof that the installed CLI cannot run it. `additional_commands` highlights newly advertised
 upstream commands while raw mode keeps them immediately usable. If help cannot be parsed reliably,
 `probe_ok` is false and both delta lists remain empty.
+
+Add `--deep` to probe every known-safe command help surface and collect its installed long options,
+raw help output, diagnostics, and exit status. The pinned upstream `unified-benchmark` and `download`
+commands do not implement non-invasive `--help`; the report marks them as skipped instead of risking
+model, corpus, or dataset downloads. Their full argument surfaces remain available through raw mode.
+Newly advertised commands are reported but not executed unless `--include-additional` is explicit,
+because the bridge cannot yet know whether their help paths are free of side effects.
 
 ## Relationship To FluidAudio
 

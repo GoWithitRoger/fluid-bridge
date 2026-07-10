@@ -15,7 +15,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fluid_bridge.capabilities import CapabilityReport
+from fluid_bridge.capabilities import (
+    UNSAFE_HELP_COMMANDS,
+    UPSTREAM_COMMANDS,
+    CapabilityReport,
+    CommandCapability,
+    DeepCapabilityReport,
+)
 
 if TYPE_CHECKING:
     from fluid_bridge.streaming import StreamingCommand
@@ -359,6 +365,37 @@ class FluidAudioBridge:
         """Compare installed FluidAudio root help with the pinned command baseline."""
         result = self.run(["--help"])
         return CapabilityReport.from_probe(result.stdout, result.stderr, result.returncode)
+
+    def deep_capabilities(self, *, include_additional: bool = False) -> DeepCapabilityReport:
+        """Probe help for every pinned command and optionally new untrusted commands."""
+        root = self.capabilities()
+        commands = list(UPSTREAM_COMMANDS)
+        if include_additional:
+            commands.extend(root.additional_commands)
+
+        probes: dict[str, CommandCapability] = {}
+        baseline = set(UPSTREAM_COMMANDS)
+        for command in commands:
+            if reason := UNSAFE_HELP_COMMANDS.get(command):
+                probes[command] = CommandCapability.from_skip(
+                    command, baseline=command in baseline, reason=reason
+                )
+                continue
+            try:
+                result = self.run([command, "--help"])
+            except (FluidAudioBridgeError, OSError, subprocess.SubprocessError) as exc:
+                probes[command] = CommandCapability.from_error(
+                    command, baseline=command in baseline, error=exc
+                )
+                continue
+            probes[command] = CommandCapability.from_probe(
+                command,
+                baseline=command in baseline,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                returncode=result.returncode,
+            )
+        return DeepCapabilityReport(root=root, commands=probes)
 
     def _prepare_invocation(
         self, args: Sequence[str]

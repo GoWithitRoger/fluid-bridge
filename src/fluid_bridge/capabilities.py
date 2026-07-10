@@ -54,7 +54,104 @@ UPSTREAM_COMMANDS = tuple(
     command for commands in UPSTREAM_COMMAND_GROUPS.values() for command in commands
 )
 
+# These commands do not intercept --help before starting network-backed work at the pinned commit.
+UNSAFE_HELP_COMMANDS: dict[str, str] = {
+    "unified-benchmark": "Upstream does not implement --help and starts a benchmark download.",
+    "download": "Upstream treats --help as unknown and starts the default dataset download.",
+}
+
 _COMMAND_LINE = re.compile(r"^\s{2,}([a-z][a-z0-9-]*)\s{2,}\S")
+_LONG_OPTION = re.compile(r"(?<![\w-])--[a-zA-Z0-9][a-zA-Z0-9-]*\b")
+
+
+@dataclass(frozen=True)
+class CommandCapability:
+    """Installed help probe for one FluidAudio command."""
+
+    command: str
+    baseline: bool
+    returncode: int | None
+    options: tuple[str, ...]
+    stdout: str
+    stderr: str
+    error: str | None = None
+    skipped_reason: str | None = None
+
+    @property
+    def probe_ok(self) -> bool:
+        """Return whether this command's help invocation succeeded."""
+        return self.returncode == 0 and self.error is None
+
+    @property
+    def skipped(self) -> bool:
+        """Return whether the probe was intentionally not executed."""
+        return self.skipped_reason is not None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable probe result."""
+        return {
+            "command": self.command,
+            "baseline": self.baseline,
+            "returncode": self.returncode,
+            "probe_ok": self.probe_ok,
+            "options": list(self.options),
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "error": self.error,
+            "skipped": self.skipped,
+            "skipped_reason": self.skipped_reason,
+        }
+
+    @classmethod
+    def from_probe(
+        cls,
+        command: str,
+        *,
+        baseline: bool,
+        stdout: str,
+        stderr: str,
+        returncode: int,
+    ) -> CommandCapability:
+        """Build a command capability from its help process result."""
+        help_text = "\n".join((stdout, stderr))
+        return cls(
+            command=command,
+            baseline=baseline,
+            returncode=returncode,
+            options=tuple(sorted(set(_LONG_OPTION.findall(help_text)))),
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    @classmethod
+    def from_error(
+        cls, command: str, *, baseline: bool, error: BaseException
+    ) -> CommandCapability:
+        """Build a failed probe without aborting the full traversal."""
+        return cls(
+            command=command,
+            baseline=baseline,
+            returncode=None,
+            options=(),
+            stdout="",
+            stderr="",
+            error=str(error),
+        )
+
+    @classmethod
+    def from_skip(
+        cls, command: str, *, baseline: bool, reason: str
+    ) -> CommandCapability:
+        """Build a result for an upstream help path that is not non-invasive."""
+        return cls(
+            command=command,
+            baseline=baseline,
+            returncode=None,
+            options=(),
+            stdout="",
+            stderr="",
+            skipped_reason=reason,
+        )
 
 
 @dataclass(frozen=True)
@@ -113,6 +210,59 @@ class CapabilityReport:
             ),
             probe_returncode=returncode,
         )
+
+
+@dataclass(frozen=True)
+class DeepCapabilityReport:
+    """Per-command installed help results for the complete pinned baseline."""
+
+    root: CapabilityReport
+    commands: Mapping[str, CommandCapability]
+
+    @property
+    def probe_ok(self) -> bool:
+        """Return whether root help and every attempted command help probe succeeded."""
+        return (
+            self.root.probe_ok
+            and not self.failed_baseline_commands
+            and not self.failed_additional_commands
+        )
+
+    @property
+    def failed_baseline_commands(self) -> tuple[str, ...]:
+        """Return pinned commands whose help probe failed."""
+        return tuple(
+            command
+            for command, probe in self.commands.items()
+            if probe.baseline and not probe.probe_ok and not probe.skipped
+        )
+
+    @property
+    def failed_additional_commands(self) -> tuple[str, ...]:
+        """Return newly advertised commands whose help probe failed."""
+        return tuple(
+            command
+            for command, probe in self.commands.items()
+            if not probe.baseline and not probe.probe_ok and not probe.skipped
+        )
+
+    @property
+    def skipped_commands(self) -> tuple[str, ...]:
+        """Return commands intentionally not invoked because help is unsafe."""
+        return tuple(command for command, probe in self.commands.items() if probe.skipped)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable deep capability report."""
+        return {
+            "root": self.root.to_dict(),
+            "probe_ok": self.probe_ok,
+            "failed_baseline_commands": list(self.failed_baseline_commands),
+            "failed_additional_commands": list(self.failed_additional_commands),
+            "skipped_commands": list(self.skipped_commands),
+            "commands": {
+                command: probe.to_dict() for command, probe in self.commands.items()
+            },
+        }
 
 
 def _parse_advertised_commands(help_text: str) -> set[str]:

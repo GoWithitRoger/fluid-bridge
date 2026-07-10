@@ -9,7 +9,7 @@ from fluid_bridge.bridge import (
     FluidAudioBridgeError,
     FluidAudioCLIConfig,
 )
-from fluid_bridge.capabilities import CapabilityReport
+from fluid_bridge.capabilities import CapabilityReport, CommandCapability, DeepCapabilityReport
 from fluid_bridge.streaming import StreamEvent, StreamingCommand
 
 FluidCLI = FluidAudioBridge
@@ -17,8 +17,10 @@ __version__ = "0.1.0"
 
 __all__ = [
     "CapabilityReport",
+    "CommandCapability",
     "CommandResult",
     "DoctorReport",
+    "DeepCapabilityReport",
     "FluidAudioBridge",
     "FluidAudioBridgeError",
     "FluidAudioCLIConfig",
