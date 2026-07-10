@@ -59,8 +59,16 @@ Run 'fluidaudio <command> --help' for command-specific options.
     assert report.commands["vad-benchmark"].stderr == "benchmark unavailable"
     assert report.failed_baseline_commands == ("vad-benchmark",)
     assert report.failed_additional_commands == ()
-    assert report.skipped_commands == tuple(UNSAFE_HELP_COMMANDS)
+    assert report.skipped_commands == tuple(
+        command for command in UPSTREAM_COMMANDS if command in UNSAFE_HELP_COMMANDS
+    )
     assert report.commands["download"].skipped is True
+    assert not any(
+        call[1:] == [command, "--help"]
+        for command in UNSAFE_HELP_COMMANDS
+        for call in calls
+    )
+    assert report.baseline_complete is True
     assert report.probe_ok is False
 
 

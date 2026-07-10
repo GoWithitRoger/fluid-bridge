@@ -57,6 +57,9 @@ UPSTREAM_COMMANDS = tuple(
 # These commands do not intercept --help before starting network-backed work at the pinned commit.
 UNSAFE_HELP_COMMANDS: dict[str, str] = {
     "unified-benchmark": "Upstream does not implement --help and starts a benchmark download.",
+    "multi-stream": "Upstream consumes --help as the first audio path before checking options.",
+    "lseend": "Upstream consumes --help as the first audio path before checking options.",
+    "cohere-transcribe": "Upstream consumes --help as the first audio path before checking options.",
     "download": "Upstream treats --help as unknown and starts the default dataset download.",
 }
 
@@ -223,10 +226,16 @@ class DeepCapabilityReport:
     def probe_ok(self) -> bool:
         """Return whether root help and every attempted command help probe succeeded."""
         return (
-            self.root.probe_ok
+            self.root.probe_returncode == 0
+            and self.baseline_complete
             and not self.failed_baseline_commands
             and not self.failed_additional_commands
         )
+
+    @property
+    def baseline_complete(self) -> bool:
+        """Return whether every pinned command has a result or intentional skip."""
+        return set(self.root.baseline_commands).issubset(self.commands)
 
     @property
     def failed_baseline_commands(self) -> tuple[str, ...]:
@@ -256,6 +265,7 @@ class DeepCapabilityReport:
         return {
             "root": self.root.to_dict(),
             "probe_ok": self.probe_ok,
+            "baseline_complete": self.baseline_complete,
             "failed_baseline_commands": list(self.failed_baseline_commands),
             "failed_additional_commands": list(self.failed_additional_commands),
             "skipped_commands": list(self.skipped_commands),

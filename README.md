@@ -149,9 +149,10 @@ upstream commands while raw mode keeps them immediately usable. If help cannot b
 `probe_ok` is false and both delta lists remain empty.
 
 Add `--deep` to probe every known-safe command help surface and collect its installed long options,
-raw help output, diagnostics, and exit status. The pinned upstream `unified-benchmark` and `download`
-commands do not implement non-invasive `--help`; the report marks them as skipped instead of risking
-model, corpus, or dataset downloads. Their full argument surfaces remain available through raw mode.
+raw help output, diagnostics, and exit status. Five pinned commands do not implement a safe
+`command --help` path: `download`, `unified-benchmark`, `multi-stream`, `lseend`, and
+`cohere-transcribe`. The report marks them as skipped instead of risking model, corpus, dataset, or
+audio work. Their full argument surfaces remain available through raw mode.
 Newly advertised commands are reported but not executed unless `--include-additional` is explicit,
 because the bridge cannot yet know whether their help paths are free of side effects.
 
@@ -181,3 +182,38 @@ uv run ruff check .
 ```
 
 Default tests do not download FluidAudio models or run live inference.
+
+### Live macOS Validation
+
+Point the bridge at a real CLI or checkout, then explicitly enable the no-download live tier:
+
+```bash
+export FLUID_AUDIO_PACKAGE=/path/to/FluidAudio
+FLUID_BRIDGE_LIVE=1 uv run pytest -m live -v
+```
+
+This runs root help and every source-audited safe command help path. Unsafe upstream help paths are
+asserted as skipped. Model-backed smoke tests require both download consent and a capability-specific
+input, so setting `FLUID_BRIDGE_LIVE=1` alone cannot start inference or download models:
+
+```bash
+export FLUID_BRIDGE_LIVE=1
+export FLUID_BRIDGE_LIVE_ALLOW_DOWNLOADS=1
+export FLUID_BRIDGE_LIVE_AUDIO=/absolute/path/to/short.wav
+export FLUID_BRIDGE_LIVE_TTS=1
+uv run pytest -m live_inference -v
+```
+
+Set `FLUID_BRIDGE_LIVE_VOICE=/absolute/path/to/reference.wav` to include PocketTTS voice cloning.
+Use `FLUID_BRIDGE_LIVE_TIMEOUT` to change the per-command timeout from its 600-second default.
+
+Dataset downloads and full benchmarks have no universal dry-run contract upstream. They are never
+started by the live suite. Run them manually through raw mode only after choosing the dataset,
+storage cost, model-download policy, and benchmark limits, for example:
+
+```bash
+fluid-bridge raw -- download --dataset ami-sdm
+fluid-bridge raw -- asr-benchmark --subset test-clean --max-files 10
+fluid-bridge raw -- diarization-benchmark --dataset ami --single-file ES2004a
+fluid-bridge raw -- tts-benchmark --backend kokoro-ane --skip-asr
+```
