@@ -13,9 +13,12 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fluid_bridge.capabilities import CapabilityReport
+
+if TYPE_CHECKING:
+    from fluid_bridge.streaming import StreamingCommand
 
 
 class FluidAudioBridgeError(RuntimeError):
@@ -157,6 +160,13 @@ class FluidAudioBridge:
             stdout=proc.stdout or "",
             stderr=proc.stderr or "",
         )
+
+    def stream(self, args: Sequence[str]) -> StreamingCommand:
+        """Start FluidAudio and expose incremental stdout and stderr events."""
+        from fluid_bridge.streaming import StreamingCommand
+
+        command, env, cwd = self._prepare_invocation(args)
+        return StreamingCommand.start(command, env, cwd, self.config.timeout_s)
 
     def transcribe(
         self,

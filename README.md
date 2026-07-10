@@ -57,6 +57,21 @@ tts = bridge.tts("Hello from FluidAudio.", "out.wav", backend="kokoro-ane")
 tts.raise_for_error()
 ```
 
+For incremental Python output, start a streaming command and consume its stdout/stderr line events:
+
+```python
+running = bridge.stream(["parakeet-eou", "--input", "meeting.wav"])
+
+for event in running:
+    print(event.stream, event.text, end="")
+
+result = running.wait()
+result.raise_for_error()
+```
+
+Call `running.cancel()` from application control flow to stop early. `FluidAudioCLIConfig(timeout_s=...)`
+applies one deadline across event iteration and `wait()`.
+
 ## CLI Usage
 
 ```bash

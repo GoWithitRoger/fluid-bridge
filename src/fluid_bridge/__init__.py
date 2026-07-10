@@ -10,6 +10,7 @@ from fluid_bridge.bridge import (
     FluidAudioCLIConfig,
 )
 from fluid_bridge.capabilities import CapabilityReport
+from fluid_bridge.streaming import StreamEvent, StreamingCommand
 
 FluidCLI = FluidAudioBridge
 __version__ = "0.1.0"
@@ -22,5 +23,7 @@ __all__ = [
     "FluidAudioBridgeError",
     "FluidAudioCLIConfig",
     "FluidCLI",
+    "StreamEvent",
+    "StreamingCommand",
     "__version__",
 ]
