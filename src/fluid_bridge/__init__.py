@@ -9,11 +9,13 @@ from fluid_bridge.bridge import (
     FluidAudioBridgeError,
     FluidAudioCLIConfig,
 )
+from fluid_bridge.capabilities import CapabilityReport
 
 FluidCLI = FluidAudioBridge
 __version__ = "0.1.0"
 
 __all__ = [
+    "CapabilityReport",
     "CommandResult",
     "DoctorReport",
     "FluidAudioBridge",
@@ -22,4 +24,3 @@ __all__ = [
     "FluidCLI",
     "__version__",
 ]
-

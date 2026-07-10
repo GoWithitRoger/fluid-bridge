@@ -61,6 +61,7 @@ tts.raise_for_error()
 
 ```bash
 fluid-bridge doctor
+fluid-bridge capabilities
 fluid-bridge transcribe meeting.wav --model-version v2
 fluid-bridge diarize meeting.wav --mode offline --threshold 0.6
 fluid-bridge vad meeting.wav --streaming --threshold 0.65
@@ -89,6 +90,13 @@ fluid-bridge raw --live -- multi-stream microphone.wav system-audio.wav
 ```
 
 The Python equivalent is `FluidAudioBridge.run_live(...)`.
+
+`fluid-bridge capabilities` compares the installed CLI's root help with the command baseline audited
+from FluidAudio commit `372eb32a`. FluidAudio's root help does not list every registered command, so
+`baseline_not_advertised` means only that a command was absent from root help; it is not treated as
+proof that the installed CLI cannot run it. `additional_commands` highlights newly advertised
+upstream commands while raw mode keeps them immediately usable. If help cannot be parsed reliably,
+`probe_ok` is false and both delta lists remain empty.
 
 ## Relationship To FluidAudio
 

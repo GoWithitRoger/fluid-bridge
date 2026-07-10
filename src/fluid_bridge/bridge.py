@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from fluid_bridge.capabilities import CapabilityReport
+
 
 class FluidAudioBridgeError(RuntimeError):
     """Raised when FluidAudio CLI discovery or execution fails."""
@@ -270,6 +272,11 @@ class FluidAudioBridge:
                 "documentation for registry, proxy, and offline-mode controls."
             ),
         )
+
+    def capabilities(self) -> CapabilityReport:
+        """Compare installed FluidAudio root help with the pinned command baseline."""
+        result = self.run(["--help"])
+        return CapabilityReport.from_probe(result.stdout, result.stderr, result.returncode)
 
     def _prepare_invocation(
         self, args: Sequence[str]

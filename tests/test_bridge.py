@@ -11,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from fluid_bridge import CommandResult, FluidAudioBridge, FluidAudioBridgeError, FluidAudioCLIConfig
+from fluid_bridge import (
+    CapabilityReport,
+    CommandResult,
+    FluidAudioBridge,
+    FluidAudioBridgeError,
+    FluidAudioCLIConfig,
+)
 from fluid_bridge.cli import main as cli_main
 
 
@@ -124,6 +130,87 @@ def test_run_live_uses_configured_invocation_context(tmp_path: Path) -> None:
     assert result.returncode == 19
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def test_capabilities_compares_advertised_commands_with_pinned_baseline() -> None:
+    help_text = """\
+FluidAudio CLI
+
+Commands:
+    process                 Process an audio file
+    transcribe              Transcribe audio
+    future-command          A newly added upstream command
+    help                    Show help
+
+Run 'fluidaudio <command> --help' for command-specific options.
+"""
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=_runner([], stdout=help_text),
+    )
+
+    report = bridge.capabilities()
+
+    assert report.baseline_commit == "372eb32a3b23342d11dca41ed75cd4d11d3f8955"
+    assert len(report.baseline_commands) == 33
+    assert report.advertised_commands == ("future-command", "process", "transcribe")
+    assert "vad-analyze" in report.baseline_not_advertised
+    assert report.additional_commands == ("future-command",)
+    assert report.probe_ok is True
+    report_dict = report.to_dict()
+    assert len(report_dict["baseline_groups"]["asr"]) == 19
+    assert report_dict["baseline_groups"]["diarization"] == [
+        "diarization-benchmark",
+        "process",
+        "sortformer",
+        "sortformer-benchmark",
+        "lseend",
+        "lseend-benchmark",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "probe_output"),
+    [(2, "FluidAudio failed to start"), (0, "Unrecognized help format")],
+)
+def test_capabilities_does_not_report_deltas_without_a_valid_comparison(
+    returncode: int, probe_output: str
+) -> None:
+    bridge = FluidAudioBridge(
+        FluidAudioCLIConfig(command=("fluidaudiocli",)),
+        runner=_runner([], stderr=probe_output, returncode=returncode),
+    )
+
+    report = bridge.capabilities()
+
+    assert report.probe_ok is False
+    assert report.advertised_commands == ()
+    assert report.baseline_not_advertised == ()
+    assert report.additional_commands == ()
+
+
+def test_cli_capabilities_prints_machine_readable_report(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    report = CapabilityReport(
+        baseline_commit="baseline-sha",
+        baseline_commands=("process", "transcribe"),
+        advertised_commands=("process", "transcribe", "future-command"),
+        baseline_not_advertised=(),
+        additional_commands=("future-command",),
+        probe_returncode=0,
+    )
+
+    class FakeBridge:
+        def capabilities(self) -> CapabilityReport:
+            return report
+
+    monkeypatch.setattr("fluid_bridge.cli.FluidAudioBridge", lambda: FakeBridge())
+
+    code = cli_main(["capabilities"])
+
+    assert json.loads(capsys.readouterr().out) == report.to_dict()
+    assert code == 0
 
 
 def test_missing_cli_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:

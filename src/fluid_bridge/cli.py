@@ -23,6 +23,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "doctor":
             print(json.dumps(bridge.doctor().to_dict(), indent=2, sort_keys=True))
             return 0
+        if args.command == "capabilities":
+            report = bridge.capabilities()
+            print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+            return 0 if report.probe_ok else 1
         if args.command == "raw":
             raw_args = args.args[1:] if args.args[:1] == ["--"] else args.args
             result = bridge.run_live(raw_args) if args.live else bridge.run(raw_args)
@@ -75,6 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("doctor", help="Report FluidAudio CLI setup status.")
+    subparsers.add_parser("capabilities", help="Compare installed commands with the baseline.")
 
     raw = subparsers.add_parser("raw", help="Run any FluidAudio CLI command.")
     raw.add_argument("--live", action="store_true", help="Inherit terminal input and output.")
