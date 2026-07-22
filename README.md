@@ -4,21 +4,17 @@
 
 # fluid-bridge
 
-Unofficial Python bindings for [FluidAudio](https://github.com/FluidInference/FluidAudio)'s
-macOS command-line interface.
+A small, unofficial Python adapter for the
+[FluidAudio](https://github.com/FluidInference/FluidAudio) macOS command-line interface.
 
-FluidAudio is a Swift SDK for local audio AI on Apple devices. Upstream FluidAudio includes
-ASR/transcription, text-to-speech, voice activity detection, speaker diarization, speaker
-embeddings/identification, offline and streaming modes, and ANE/CoreML execution.
+It is a hobby project built to make FluidAudio easier to call from Python without embedding Swift
+or Rust in the Python process. It is maintained on a best-effort basis and is not affiliated with
+Fluid Inference.
 
-`fluid-bridge` is intentionally thin: it lets Python projects call FluidAudio's official CLI without
-embedding Swift or Rust in the Python runtime. The first public release focuses on CLI execution and
-conservative result handling; future releases may add an optional Rust/PyO3 backend over
-[`fluidaudio-rs`](https://github.com/FluidInference/fluidaudio-rs).
-
-The support contract is complete **CLI transport parity**, not a duplicate implementation of the
-FluidAudio Swift SDK. See the [full capability matrix](docs/CAPABILITIES.md) and
-[validation guide](docs/VALIDATION.md).
+The bridge stays deliberately thin: it runs the separate FluidAudio CLI, preserves its output and
+exit status, and adds conservative Python and command-line helpers. See the
+[capability matrix](docs/CAPABILITIES.md) and [validation guide](docs/VALIDATION.md) for the detailed
+behavior.
 
 ## Important Prerequisite
 
