@@ -7,8 +7,8 @@
 A small, unofficial Python adapter for the
 [FluidAudio](https://github.com/FluidInference/FluidAudio) macOS command-line interface.
 
-I built it so Python code can call FluidAudio without loading Swift or Rust into the same process.
-This is an unaffiliated hobby project, and I maintain it when I can.
+The bridge lets Python code call FluidAudio without loading Swift or Rust into the same process.
+This is an unaffiliated hobby project, maintained when time allows.
 
 The adapter runs the separate FluidAudio CLI and returns its output and exit status. A small Python
 API and command-line wrapper cover common calls. See the [capability matrix](docs/CAPABILITIES.md)
