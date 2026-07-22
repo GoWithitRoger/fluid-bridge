@@ -7,26 +7,23 @@
 A small, unofficial Python adapter for the
 [FluidAudio](https://github.com/FluidInference/FluidAudio) macOS command-line interface.
 
-It is a hobby project built to make FluidAudio easier to call from Python without embedding Swift
-or Rust in the Python process. It is maintained on a best-effort basis and is not affiliated with
-Fluid Inference.
+I built it so Python code can call FluidAudio without loading Swift or Rust into the same process.
+This is an unaffiliated hobby project, and I maintain it when I can.
 
-The bridge stays deliberately thin: it runs the separate FluidAudio CLI, preserves its output and
-exit status, and adds conservative Python and command-line helpers. See the
-[capability matrix](docs/CAPABILITIES.md) and [validation guide](docs/VALIDATION.md) for the detailed
-behavior.
+The adapter runs the separate FluidAudio CLI and returns its output and exit status. A small Python
+API and command-line wrapper cover common calls. See the [capability matrix](docs/CAPABILITIES.md)
+and [validation guide](docs/VALIDATION.md) for the details.
 
-## Important Prerequisite
+## Important prerequisite
 
 `fluid-bridge` is not a built-in macOS speech feature and it does not contain FluidAudio itself.
 macOS supplies the Core ML runtime and Apple Silicon hardware that can execute compatible models;
 it does **not** ship the FluidAudio SDK, `fluidaudiocli`, or FluidAudio's model assets.
 
-This package is a Python adapter around a separate FluidAudio CLI installation. Before it can run
-transcription, diarization, VAD, text-to-speech, or voice cloning, provide FluidAudio by either
-installing its CLI or pointing the bridge at a local FluidAudio checkout. The bridge never installs
-FluidAudio. The external FluidAudio process, not this Python package, controls any model download
-and cache behavior triggered by an inference command.
+This package is a Python adapter around a separate FluidAudio CLI installation. To use
+transcription, diarization, VAD, text-to-speech, or voice cloning, install the FluidAudio CLI or
+point the bridge at a local FluidAudio checkout. The bridge does not install FluidAudio. Its external
+process controls model downloads and caching during inference.
 
 ## Install
 
@@ -57,7 +54,7 @@ inference command may cause FluidAudio to download and cache the selected third-
 consult FluidAudio's upstream documentation for model availability, storage, proxy, and offline
 controls.
 
-## Python Usage
+## Python usage
 
 ```python
 from fluid_bridge import FluidAudioBridge
@@ -117,7 +114,7 @@ result.raise_for_error()
 Call `running.cancel()` from application control flow to stop early. `FluidAudioCLIConfig(timeout_s=...)`
 applies one deadline across event iteration and `wait()`.
 
-## CLI Usage
+## CLI usage
 
 ```bash
 fluid-bridge doctor
@@ -131,8 +128,8 @@ fluid-bridge vad meeting.wav --streaming --threshold 0.65
 fluid-bridge tts "Hello from FluidAudio." --backend kokoro-ane --output out.wav
 ```
 
-Friendly commands accept an upstream option tail after `--`. This keeps common options concise
-while leaving every FluidAudio option available:
+The named commands accept an upstream option tail after `--`. This covers common options without
+hiding the rest of FluidAudio's CLI:
 
 ```bash
 fluid-bridge transcribe meeting.wav --streaming --output-json result.json -- --custom-vocab terms.txt
@@ -141,9 +138,8 @@ fluid-bridge vad meeting.wav --export-wav speech.wav -- --min-silence-ms 400 --p
 fluid-bridge tts "Hello" --backend pocket --clone-voice speaker.wav --output out.wav -- --temperature 0.7
 ```
 
-Use `raw --` to run any upstream FluidAudio command with its arguments unchanged. This is the full
-CLI compatibility path, including commands and options that do not yet have a friendly
-`fluid-bridge` subcommand:
+Use `raw --` to run an upstream FluidAudio command with its arguments unchanged. It also covers
+commands and options that do not have a named `fluid-bridge` subcommand:
 
 ```bash
 fluid-bridge raw -- parakeet-eou --input meeting.wav
@@ -167,7 +163,7 @@ The Python equivalent is `FluidAudioBridge.run_live(...)`.
 `fluid-bridge capabilities` compares the installed CLI's root help with the command baseline audited
 from FluidAudio commit `372eb32a`. FluidAudio's root help does not list every registered command, so
 `baseline_not_advertised` means only that a command was absent from root help; it is not treated as
-proof that the installed CLI cannot run it. `additional_commands` highlights newly advertised
+proof that the installed CLI cannot run it. `additional_commands` lists newly advertised
 upstream commands while raw mode keeps them immediately usable. If help cannot be parsed reliably,
 `probe_ok` is false and both delta lists remain empty.
 
@@ -181,24 +177,23 @@ because the bridge cannot yet know whether their help paths are free of side eff
 
 `doctor` reports platform, CLI discovery, Swift, and `xcode-select` state without running FluidAudio.
 Add `--probe` (or `probe_cli=True` in Python) to execute root help and receive a readiness result plus
-the exact command, exit status, stdout, stderr, and actionable findings. The probe recognizes common
+the exact command, exit status, stdout, stderr, and specific findings. The probe recognizes common
 Swift compiler/SDK incompatibility messages and keeps the original toolchain diagnostics intact.
 
-## Relationship To FluidAudio
+## Relationship to FluidAudio
 
 This project is an unofficial Python adapter. FluidAudio is upstream-owned by Fluid Inference and
 has its own source, model, and third-party licensing. Core ML is Apple technology for packaging and
 running compatible models; the models FluidAudio uses are not Apple-provided macOS speech models.
 FluidAudio converts or integrates third-party open models for Core ML/ANE execution and may download
 their assets on first use. See the upstream documentation for model provenance, registry, proxy, and
-offline-mode controls. The source-backed [dependency research note](docs/RESEARCH-FLUIDAUDIO-DEPENDENCIES.md)
-explains the relationship among macOS, FluidAudio, and `fluidaudio-rs`.
+offline-mode controls. The [dependency research note](docs/RESEARCH-FLUIDAUDIO-DEPENDENCIES.md) documents how
+macOS, FluidAudio, and `fluidaudio-rs` fit together.
 
-## Prior Art
+## Prior art
 
-Many projects use FluidAudio directly in apps and pipelines, including Senko and several macOS/iOS
-dictation or meeting tools. `fluid-bridge` is narrower: a small reusable Python adapter around the
-official FluidAudio CLI, not an application pipeline.
+Applications such as Senko use FluidAudio directly. `fluid-bridge` is only a reusable Python adapter
+around the official FluidAudio CLI; it does not provide an application pipeline.
 
 ## Development
 
@@ -211,7 +206,7 @@ uv run ty check
 
 Default tests do not download FluidAudio models or run live inference.
 
-### Live macOS Validation
+### Live macOS validation
 
 Point the bridge at a real CLI or checkout, then explicitly enable the no-download live tier:
 
@@ -220,9 +215,9 @@ export FLUID_AUDIO_PACKAGE=/path/to/FluidAudio
 FLUID_BRIDGE_LIVE=1 uv run pytest -m live -v
 ```
 
-This runs root help and every source-audited safe command help path. Unsafe upstream help paths are
-asserted as skipped. Model-backed smoke tests require both download consent and a capability-specific
-input, so setting `FLUID_BRIDGE_LIVE=1` alone cannot start inference or download models:
+This runs root help and every source-audited safe command help path. The suite checks that unsafe
+help paths remain skipped. Model-backed smoke tests require both download consent and a
+capability-specific input, so setting `FLUID_BRIDGE_LIVE=1` alone cannot start inference or download models:
 
 ```bash
 export FLUID_BRIDGE_LIVE=1
@@ -235,9 +230,9 @@ uv run pytest -m live_inference -v
 Set `FLUID_BRIDGE_LIVE_VOICE=/absolute/path/to/reference.wav` to include PocketTTS voice cloning.
 Use `FLUID_BRIDGE_LIVE_TIMEOUT` to change the per-command timeout from its 600-second default.
 
-Dataset downloads and full benchmarks have no universal dry-run contract upstream. They are never
-started by the live suite. Run them manually through raw mode only after choosing the dataset,
-storage cost, model-download policy, and benchmark limits, for example:
+Dataset downloads and full benchmarks do not share a reliable dry-run contract. The live suite never
+starts them. Run them manually only after choosing the dataset, storage cost, model-download policy,
+and benchmark limits:
 
 ```bash
 fluid-bridge raw -- download --dataset ami-sdm

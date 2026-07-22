@@ -1,10 +1,10 @@
-# Validation Guide
+# Validation guide
 
 The validation strategy has three tiers. The first is always safe and local; later tiers require a
 separate FluidAudio installation on macOS and, for inference, explicit consent to model downloads.
 macOS alone provides neither `fluidaudiocli` nor FluidAudio model assets.
 
-## Tier 1: Automated Adapter Tests
+## Tier 1: automated adapter tests
 
 ```bash
 uv run pytest
@@ -17,7 +17,7 @@ signals, streaming, cancellation, timeouts, all 33 pinned command records, deep 
 doctor diagnostics, stable workflow argv, JSON results, and artifact lifecycle. They do not invoke
 FluidAudio or download models.
 
-## Tier 2: Real CLI, No Downloads
+## Tier 2: real CLI, no downloads
 
 Configure one real execution path:
 
@@ -36,7 +36,7 @@ This verifies macOS readiness, root help, every pinned safe command help path, t
 and the audited skip set. It does not select `live_inference` tests. At the pinned upstream commit,
 the skip set is `download`, `unified-benchmark`, `multi-stream`, `lseend`, and `cohere-transcribe`.
 
-## Tier 3: Model-Backed Inference
+## Tier 3: model-backed inference
 
 Inference is selected separately and requires download consent:
 
@@ -54,10 +54,10 @@ uses temporary output paths and verifies parsed results and produced artifacts.
 
 `FLUID_BRIDGE_LIVE_TIMEOUT` sets a positive per-command timeout in seconds; the default is 600.
 
-## Datasets And Benchmarks
+## Datasets and benchmarks
 
 FluidAudio dataset and benchmark commands can consume substantial bandwidth, storage, memory, and
-time. They do not share a universal dry-run interface, so they are manual validation gates:
+time. They do not share a universal dry-run interface, so run them manually:
 
 ```bash
 fluid-bridge raw -- download --dataset ami-sdm
@@ -70,7 +70,7 @@ fluid-bridge raw -- tts-benchmark --backend kokoro-ane --skip-asr
 Choose explicit datasets and file limits. Review upstream storage/model requirements before running
 them. Raw mode preserves their progress output, diagnostics, and exit status.
 
-## Release Checks
+## Release checks
 
 Before publishing:
 
@@ -82,5 +82,5 @@ uv build
 ```
 
 Run Tier 2 on macOS. Run only the Tier 3 capabilities for which explicit test inputs and download
-consent are available. Record skipped environmental validation honestly; do not convert it into a
-mocked success claim.
+consent are available. If the environment prevents a check, record it as skipped instead of
+treating a mock as a pass.
