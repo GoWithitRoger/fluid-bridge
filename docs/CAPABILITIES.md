@@ -1,32 +1,31 @@
-# FluidAudio macOS Capability Matrix
+# FluidAudio macOS capability matrix
 
-`fluid-bridge` provides complete transport access to the FluidAudio CLI audited at upstream commit
-`372eb32a3b23342d11dca41ed75cd4d11d3f8955`. That snapshot registers 33 commands. Every command and
-option is callable through `fluid-bridge raw -- ...` and `FluidAudioBridge.run(...)`.
+`fluid-bridge` passes arguments to the FluidAudio CLI audited at upstream commit
+`372eb32a3b23342d11dca41ed75cd4d11d3f8955`. That snapshot registers 33 commands. Raw mode accepts
+each command and option through `fluid-bridge raw -- ...` and `FluidAudioBridge.run(...)`.
 
-## Runtime Prerequisite
+## Runtime prerequisite
 
 The bridge is a Python adapter, not FluidAudio itself. macOS provides Core ML and compatible Apple
 Silicon hardware, but it does not include FluidAudio, `fluidaudiocli`, or the third-party model assets
-that FluidAudio runs. A caller must provide a built CLI on `PATH`, an explicit `FLUID_BRIDGE_CLI`
-command, or a FluidAudio checkout through `FLUID_AUDIO_PACKAGE`. The bridge does not install the CLI
-or download model assets; first inference is managed by the configured FluidAudio installation.
+that FluidAudio runs. You must provide a built CLI on `PATH`, an explicit `FLUID_BRIDGE_CLI`
+command, or a FluidAudio checkout through `FLUID_AUDIO_PACKAGE`. The bridge does not install the CLI or download model assets.
+The configured FluidAudio installation handles first inference and any model downloads.
 
-The bridge deliberately does not recreate all 33 upstream parsers. Four common workflows have a
-curated stable interface; every uncommon, experimental, benchmark, dataset, and newly added option
-continues through the lossless compatibility interface. Friendly commands also accept an unparsed
-tail after `--`, and Python methods accept `extra_args`.
+The bridge does not recreate all 33 upstream parsers. Four common workflows have a stable interface;
+all other commands and options remain available through raw mode. The named commands also accept an
+unparsed tail after `--`, and Python methods accept `extra_args`.
 
-## Interface Levels
+## Interface levels
 
 - **Stable**: curated Python method and `fluid-bridge` command, plus raw access.
 - **Raw**: full argv passthrough with stdout, stderr, and exit status preserved.
 - **Raw live**: passthrough with inherited terminal streams and signal mirroring.
 - **Python stream**: incremental stdout/stderr events, cancellation, and one timeout deadline.
 
-This is full FluidAudio **CLI** capability, not full Swift SDK binding coverage. SDK-only APIs,
-in-process audio buffers, Swift protocols, and app lifecycle integrations are outside the current
-product boundary. They should be added only for a demonstrated use case that the CLI cannot serve.
+The adapter covers the FluidAudio **CLI**. It does not bind SDK-only APIs, in-process audio buffers,
+Swift protocols, or app lifecycle integrations. Those belong here only when the CLI cannot serve a
+demonstrated use case.
 
 ## ASR
 
@@ -63,14 +62,14 @@ product boundary. They should be added only for a demonstrated use case that the
 | `lseend` | Raw | LS-EEND file diarization; positional help handling is unsafe, so deep probe skips it. |
 | `lseend-benchmark` | Raw | LS-EEND AMI benchmark and post-processing controls. |
 
-## Voice Activity Detection
+## Voice activity detection
 
 | Upstream command | Interface | Capability and boundary |
 | --- | --- | --- |
 | `vad-analyze` | Stable | Batch/streaming segmentation, thresholds, compute units, tuning tail, and speech WAV export. |
 | `vad-benchmark` | Raw | VAD datasets, thresholds, compute units, and result output. |
 
-## Speech Generation And Corpora
+## Speech generation and corpora
 
 | Upstream command | Interface | Capability and boundary |
 | --- | --- | --- |
@@ -86,7 +85,7 @@ product boundary. They should be added only for a demonstrated use case that the
 | --- | --- | --- |
 | `download` | Raw | Explicit FluidAudio dataset download. Upstream bare `--help` starts the default download, so deep probe never invokes it. |
 
-## Option Coverage
+## Option coverage
 
 Raw mode does no option parsing or allowlisting:
 
@@ -100,7 +99,7 @@ The Python equivalent is:
 result = bridge.run(["COMMAND", "--upstream-option", "value"])
 ```
 
-For a friendly command, append options the curated interface does not name:
+For a named command, append options the curated interface does not name:
 
 ```bash
 fluid-bridge transcribe audio.wav -- --custom-vocab terms.txt --encoder-precision int8
@@ -114,10 +113,10 @@ result = bridge.transcribe(
 ```
 
 `fluid-bridge capabilities --deep` asks each source-audited safe installed command for help and
-returns its discovered long options and raw diagnostics. This dynamic report is the option-drift
-surface; a static Python copy of every option would go stale and create a second parser to maintain.
+returns its discovered long options and raw diagnostics. This report shows changes in installed
+options. A static Python copy of every option would go stale and create a second parser to maintain.
 
-## Runtime Behavior
+## Runtime behavior
 
 - `run()` captures complete stdout/stderr and preserves the upstream exit code.
 - `run_live()` inherits terminal streams and mirrors signal termination.
@@ -127,15 +126,15 @@ surface; a static Python copy of every option would go stale and create a second
 - `doctor --probe` checks executable readiness without loading models.
 - Deep capability and default automated tests never run source-audited unsafe help paths.
 
-## Drift Policy
+## Drift policy
 
-The pinned command baseline proves what was audited, while raw passthrough keeps future commands and
-options immediately callable. After an upstream update:
+The pinned command baseline records what was audited. Raw mode still accepts commands and options
+added later. After an upstream update:
 
 1. Run `fluid-bridge capabilities` to inspect newly advertised commands.
 2. Audit any new command's `--help` path for side effects before adding it to safe deep probing.
 3. Run `fluid-bridge capabilities --deep` against the installed checkout.
 4. Update the pinned baseline and this matrix in one reviewed change.
 
-No absent root-help entry is treated as proof that a command is unsupported; upstream root help is
-known to omit registered commands and may log through channels that are not captured as stdout.
+An entry missing from root help does not prove that a command is unsupported. Upstream root help can
+omit registered commands or log through channels other than stdout.

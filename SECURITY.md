@@ -1,4 +1,4 @@
-# Security Policy
+# Security policy
 
 Please report security issues privately by opening a GitHub security advisory or contacting the
 repository owner through GitHub.

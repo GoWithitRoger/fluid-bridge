@@ -1,4 +1,4 @@
-# Third-Party Notices
+# Third-party notices
 
 `fluid-bridge` is an unofficial Python adapter for FluidAudio's command-line interface.
 

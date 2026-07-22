@@ -22,7 +22,7 @@ they are opt-in and clearly marked.
 For opt-in real macOS checks, follow `docs/VALIDATION.md`. Keep `live` no-download checks separate
 from `live_inference`; inference must require explicit download consent and capability inputs.
 
-## Design Guidelines
+## Design guidelines
 
 - Keep the package a thin adapter around FluidAudio's public CLI.
 - Do not add application-specific behavior.
